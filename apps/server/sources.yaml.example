@@ -3,7 +3,7 @@ sources:
   - id: rpi-node
     name: Raspberry Pi System
     type: prometheus
-    url: http://100.64.130.13:9100/metrics
+    url: http://localhost:9100/metrics
     interval: 60
     metrics:
       - name: node_cpu_seconds_total
@@ -34,7 +34,7 @@ sources:
   - id: home-assistant
     name: Home Assistant
     type: home-assistant
-    url: http://100.64.130.13:8123/api
+    url: http://localhost:8123/api
     interval: 300
     auth:
       token: YOUR_LONG_LIVED_ACCESS_TOKEN

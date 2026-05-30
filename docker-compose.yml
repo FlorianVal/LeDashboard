@@ -1,9 +1,13 @@
 services:
   ledashboard:
     image: florianval/ledashboard:latest
-    ports:
-      - "3000:3000"
+    network_mode: host
     volumes:
       - ./data:/app/data
       - ./sources.yaml:/app/sources.yaml
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3002
+      - DATABASE_PATH=/app/data/ledashboard.sqlite
+      - SOURCES_PATH=/app/sources.yaml
     restart: unless-stopped
