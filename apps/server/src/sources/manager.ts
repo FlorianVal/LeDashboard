@@ -1,9 +1,9 @@
 import type { SourcesConfig, SourceStatus } from "@ledashboard/shared";
-import type { DbContext } from "../db/client";
-import { insertMetricDef, insertSamplesBatch, getMetricDefinitions } from "../db/queries";
-import type { MetricsAdapter, CollectedSample } from "./adapter";
-import { PrometheusAdapter } from "./prometheus";
-import { HomeAssistantAdapter } from "./home-assistant";
+import type { DbContext } from "../db/client.js";
+import { insertMetricDef, insertSamplesBatch, getMetricDefinitions } from "../db/queries.js";
+import type { MetricsAdapter, CollectedSample } from "./adapter.js";
+import { PrometheusAdapter } from "./prometheus.js";
+import { HomeAssistantAdapter } from "./home-assistant.js";
 
 export class SourceManager {
   private adapters: Map<string, MetricsAdapter> = new Map();

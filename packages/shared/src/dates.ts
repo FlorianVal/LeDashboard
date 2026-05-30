@@ -1,6 +1,6 @@
 import { format, formatDistanceToNow, differenceInSeconds } from "date-fns";
 import { fr } from "date-fns/locale";
-import type { ISODateString } from "./types";
+import type { ISODateString } from "./types.js";
 
 export function formatTimestamp(ts: number, pattern: string = "HH:mm"): string {
   return format(new Date(ts * 1000), pattern, { locale: fr });

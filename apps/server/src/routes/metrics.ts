@@ -1,11 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import type { DbContext } from "../db/client";
+import type { DbContext } from "../db/client.js";
 import {
   getMetricDefinitions,
   getMetricDefinition,
   getSamples,
   getCategories,
-} from "../db/queries";
+} from "../db/queries.js";
 import { unixTimestamp, secondsAgo, computeWindow } from "@ledashboard/shared";
 
 export function registerMetricsRoutes(

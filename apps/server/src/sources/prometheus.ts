@@ -1,5 +1,5 @@
 import type { MetricsSourceConfig, MetricDef } from "@ledashboard/shared";
-import type { MetricsAdapter, CollectedSample } from "./adapter";
+import type { MetricsAdapter, CollectedSample } from "./adapter.js";
 import { unixTimestamp } from "@ledashboard/shared";
 
 export class PrometheusAdapter implements MetricsAdapter {

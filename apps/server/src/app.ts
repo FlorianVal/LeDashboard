@@ -3,14 +3,14 @@ import fastifyStatic from "@fastify/static";
 import { resolve, dirname } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { loadServerConfig, loadSourcesConfig } from "./config";
-import { createDatabase } from "./db/client";
-import type { DbContext } from "./db/client";
-import { SourceManager } from "./sources/manager";
-import { registerHealthRoutes } from "./routes/health";
-import { registerMetricsRoutes } from "./routes/metrics";
-import { registerSourcesRoutes } from "./routes/sources";
-import { pruneOldSamples } from "./services/retention";
+import { loadServerConfig, loadSourcesConfig } from "./config.js";
+import { createDatabase } from "./db/client.js";
+import type { DbContext } from "./db/client.js";
+import { SourceManager } from "./sources/manager.js";
+import { registerHealthRoutes } from "./routes/health.js";
+import { registerMetricsRoutes } from "./routes/metrics.js";
+import { registerSourcesRoutes } from "./routes/sources.js";
+import { pruneOldSamples } from "./services/retention.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

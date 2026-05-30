@@ -1,5 +1,5 @@
-import type { DbContext } from "../db/client";
-import { deleteSamplesOlderThan } from "../db/queries";
+import type { DbContext } from "../db/client.js";
+import { deleteSamplesOlderThan } from "../db/queries.js";
 import { unixTimestamp } from "@ledashboard/shared";
 
 export function pruneOldSamples(

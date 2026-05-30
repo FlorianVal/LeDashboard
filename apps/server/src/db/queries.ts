@@ -1,7 +1,7 @@
 import { v4 as uuid } from "uuid";
 import { eq } from "drizzle-orm";
-import type { DbContext } from "./client";
-import { metricDefinitions } from "./schema";
+import type { DbContext } from "./client.js";
+import { metricDefinitions } from "./schema.js";
 import type { MetricDef, Sample, CategoryInfo } from "@ledashboard/shared";
 
 export function insertMetricDef(

@@ -1,5 +1,5 @@
-import { buildApp } from "./app";
-import { loadServerConfig } from "./config";
+import { buildApp } from "./app.js";
+import { loadServerConfig } from "./config.js";
 
 const config = loadServerConfig();
 const app = buildApp();
