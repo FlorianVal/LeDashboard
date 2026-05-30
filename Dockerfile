@@ -10,6 +10,7 @@ RUN npm install
 
 COPY . .
 
+RUN find . -name tsconfig.tsbuildinfo -delete
 RUN npm --workspace @ledashboard/shared run build
 RUN npm --workspace @ledashboard/web run build
 RUN npm --workspace @ledashboard/server run build
