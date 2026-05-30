@@ -1,8 +1,7 @@
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
-import { resolve, dirname } from "node:path";
+import { resolve } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { loadServerConfig, loadSourcesConfig } from "./config.js";
 import { createDatabase } from "./db/client.js";
 import type { DbContext } from "./db/client.js";
@@ -11,8 +10,6 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerMetricsRoutes } from "./routes/metrics.js";
 import { registerSourcesRoutes } from "./routes/sources.js";
 import { pruneOldSamples } from "./services/retention.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export type BuildAppOptions = {
   databasePath?: string;
@@ -43,7 +40,7 @@ export function buildApp(options: BuildAppOptions = {}) {
     pruneOldSamples(ctx);
     setInterval(() => pruneOldSamples(ctx), 86400_000);
 
-    const publicDir = resolve(__dirname, "../../web/dist");
+    const publicDir = resolve("public");
     if (existsSync(publicDir)) {
       app.register(fastifyStatic, {
         root: publicDir,
