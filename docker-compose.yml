@@ -1,0 +1,9 @@
+services:
+  ledashboard:
+    image: florianval/ledashboard:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./sources.yaml:/app/sources.yaml
+    restart: unless-stopped

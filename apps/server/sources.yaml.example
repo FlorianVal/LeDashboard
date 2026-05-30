@@ -1,0 +1,81 @@
+# Example configuration - copy to sources.yaml and edit
+sources:
+  - id: rpi-node
+    name: Raspberry Pi System
+    type: prometheus
+    url: http://100.64.130.13:9100/metrics
+    interval: 60
+    metrics:
+      - name: node_cpu_seconds_total
+        category: system
+        unit: seconds
+      - name: node_load1
+        category: system
+        unit: load
+      - name: node_load5
+        category: system
+        unit: load
+      - name: node_load15
+        category: system
+        unit: load
+      - name: node_memory_MemTotal_bytes
+        category: system
+        unit: bytes
+      - name: node_memory_MemAvailable_bytes
+        category: system
+        unit: bytes
+      - name: node_network_receive_bytes_total
+        category: network
+        unit: bytes
+      - name: node_network_transmit_bytes_total
+        category: network
+        unit: bytes
+
+  - id: home-assistant
+    name: Home Assistant
+    type: home-assistant
+    url: http://100.64.130.13:8123/api
+    interval: 300
+    auth:
+      token: YOUR_LONG_LIVED_ACCESS_TOKEN
+    sensors:
+      # Add your sensor entity_ids here
+      # - entity_id: sensor.temperature_living_room
+      #   name: Salon Temperature
+      #   category: environment
+      #   unit: °C
+      # - entity_id: sensor.humidity_living_room
+      #   name: Salon Humidite
+      #   category: environment
+      #   unit: "%"
+
+  - id: nas-node
+    name: NAS System
+    type: prometheus
+    url: http://100.100.172.55:9100/metrics
+    interval: 60
+    metrics:
+      - name: node_cpu_seconds_total
+        category: system
+        unit: seconds
+      - name: node_load1
+        category: system
+        unit: load
+      - name: node_load5
+        category: system
+        unit: load
+      - name: node_load15
+        category: system
+        unit: load
+      - name: node_memory_MemTotal_bytes
+        category: system
+        unit: bytes
+      - name: node_memory_MemAvailable_bytes
+        category: system
+        unit: bytes
+      - name: node_network_receive_bytes_total
+        category: network
+        unit: bytes
+      - name: node_network_transmit_bytes_total
+        category: network
+        unit: bytes

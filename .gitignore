@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.claude/
+*.sqlite
+sources.yaml
+.env
+.env.local
+*.local.json
+data/

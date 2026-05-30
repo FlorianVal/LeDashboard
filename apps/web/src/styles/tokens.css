@@ -1,0 +1,63 @@
+:root {
+  /* Background */
+  --color-bg-primary: #f7faf6;
+  --color-bg-secondary: #ffffff;
+  --color-bg-elevated: #ffffff;
+  --color-bg-wash: #edf6ee;
+
+  /* Accent */
+  --color-accent: #177a47;
+  --color-accent-strong: #0f5132;
+  --color-accent-light: #dff3e6;
+
+  /* Chart series */
+  --color-chart-1: #177a47;
+  --color-chart-2: #2563eb;
+  --color-chart-3: #d97706;
+  --color-chart-4: #7c3aed;
+  --color-chart-5: #dc2626;
+  --color-chart-6: #0891b2;
+  --color-chart-7: #db2777;
+  --color-chart-8: #65a30d;
+
+  /* Text */
+  --color-text-primary: #17211b;
+  --color-text-secondary: #607267;
+  --color-text-muted: #87938b;
+
+  /* Border */
+  --color-border: #dbe7de;
+  --color-border-strong: #b7cbbb;
+
+  /* States */
+  --color-success: #177a47;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-offline: #a1a1aa;
+
+  /* Shadows */
+  --shadow-soft: 0 18px 45px rgba(23, 33, 27, 0.12);
+  --shadow-touch: 0 8px 20px rgba(23, 122, 71, 0.18);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* Typography */
+  --font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  --font-body: 16px;
+  --font-label: 12px;
+  --font-heading: 20px;
+  --font-display: 28px;
+  --font-caption: 11px;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-body: 1.5;
+  --line-height-heading: 1.2;
+}

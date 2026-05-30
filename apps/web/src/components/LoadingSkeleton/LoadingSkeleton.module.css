@@ -1,0 +1,39 @@
+.wrapper {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+  gap: var(--space-md);
+}
+
+.card {
+  background: var(--color-bg-elevated);
+  border-radius: 18px;
+  border: 1px solid var(--color-border);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-soft);
+}
+
+.header {
+  height: 24px;
+  width: 40%;
+  background: var(--color-border);
+  border-radius: 6px;
+  margin-bottom: var(--space-lg);
+}
+
+.chart {
+  height: 180px;
+  background: var(--color-bg-wash);
+  border-radius: 10px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@media (max-width: 720px) {
+  .wrapper {
+    grid-template-columns: 1fr;
+  }
+}

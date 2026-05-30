@@ -1,0 +1,41 @@
+.bar {
+  display: flex;
+  gap: var(--space-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.source {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-label);
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.green {
+  background: var(--color-success);
+}
+
+.red {
+  background: var(--color-error);
+}
+
+.gray {
+  background: var(--color-offline);
+}
+
+.name {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.time {
+  color: var(--color-text-muted);
+}

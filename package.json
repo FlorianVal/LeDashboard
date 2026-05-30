@@ -1,0 +1,24 @@
+{
+  "name": "@ledashboard/ledashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Home metrics dashboard",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:server": "npm --workspace @ledashboard/server run dev",
+    "dev:web": "npm --workspace @ledashboard/web run dev",
+    "build": "npm --workspace @ledashboard/shared run build && npm --workspace @ledashboard/server run build && npm --workspace @ledashboard/web run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FlorianVal/LeDashboard.git"
+  },
+  "author": "Florian Valade",
+  "license": "ISC"
+}
