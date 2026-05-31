@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { unixTimestamp, secondsAgo, computeWindow } from "@ledashboard/shared";
 
 export type TimeRangePreset = "1h" | "6h" | "24h" | "7d" | "30d" | "90d";
@@ -19,6 +19,8 @@ const PRESETS: { preset: TimeRangePreset; label: string; seconds: number }[] = [
   { preset: "30d", label: "30J", seconds: 2592000 },
   { preset: "90d", label: "3M", seconds: 7776000 },
 ];
+
+const AUTO_REFRESH_MS = 60_000;
 
 function buildRange(preset: TimeRangePreset): TimeRange {
   const entry = PRESETS.find((p) => p.preset === preset)!;
@@ -47,6 +49,13 @@ export function useTimeRange(defaultPreset: TimeRangePreset = "24h") {
   );
 
   const setPreset = (preset: TimeRangePreset) => setRange(buildRange(preset));
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setRange((prev) => buildRange(prev.preset));
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, []);
 
   return { range, presets, setPreset };
 }

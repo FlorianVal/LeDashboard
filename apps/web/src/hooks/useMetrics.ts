@@ -13,6 +13,7 @@ export function useMetrics(category: string | null, timeRange: TimeRange) {
   const [error, setError] = useState<string | null>(null);
   const [metricDefs, setMetricDefs] = useState<MetricDef[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const isFirstFetch = useRef(true);
 
   const fetchAll = useCallback(async () => {
     try {
@@ -46,7 +47,10 @@ export function useMetrics(category: string | null, timeRange: TimeRange) {
   }, [category, timeRange]);
 
   useEffect(() => {
-    setLoading(true);
+    if (isFirstFetch.current) {
+      setLoading(true);
+      isFirstFetch.current = false;
+    }
     fetchAll();
 
     intervalRef.current = setInterval(fetchAll, POLL_INTERVAL_MS);
