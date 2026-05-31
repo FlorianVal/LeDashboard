@@ -57,8 +57,20 @@ export class HomeAssistantAdapter implements MetricsAdapter {
         const rawValue = sensor.attribute
           ? data.attributes[sensor.attribute]
           : data.state;
-        const value = typeof rawValue === "number" ? rawValue : parseFloat(String(rawValue));
-        if (isNaN(value)) continue;
+        let value: number;
+        if (typeof rawValue === "number") {
+          value = rawValue;
+        } else if (typeof rawValue === "string") {
+          const parsed = parseFloat(rawValue);
+          if (!isNaN(parsed)) {
+            value = parsed;
+          } else {
+            // Map common non-numeric states: "off" → 0, anything else → 1
+            value = rawValue === "off" ? 0 : 1;
+          }
+        } else {
+          continue;
+        }
 
         const metricId = sensor.attribute
           ? `${this.sourceId}:${sensor.entity_id}:${sensor.attribute}`

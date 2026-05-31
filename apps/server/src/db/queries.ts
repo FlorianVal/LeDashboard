@@ -8,29 +8,21 @@ export function insertMetricDef(
   ctx: DbContext,
   metric: Omit<MetricDef, "labels"> & { labelsJson?: string | null }
 ): void {
-  ctx.db
-    .insert(metricDefinitions)
-    .values({
-      id: metric.id,
-      sourceId: metric.sourceId,
-      name: metric.name,
-      displayName: metric.displayName,
-      category: metric.category,
-      unit: metric.unit ?? null,
-      labelsJson: metric.labelsJson ?? null,
-      createdAt: new Date().toISOString(),
-    })
-    .onConflictDoUpdate({
-      target: metricDefinitions.id,
-      set: {
-        name: metric.name,
-        displayName: metric.displayName,
-        category: metric.category,
-        unit: metric.unit ?? null,
-        labelsJson: metric.labelsJson ?? null,
-      },
-    })
-    .run();
+  ctx.sqlite
+    .prepare(
+      `INSERT OR REPLACE INTO metric_definitions (id, source_id, name, display_name, category, unit, labels_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      metric.id,
+      metric.sourceId,
+      metric.name,
+      metric.displayName,
+      metric.category,
+      metric.unit ?? null,
+      metric.labelsJson ?? null,
+      new Date().toISOString()
+    );
 }
 
 export function insertSamplesBatch(
