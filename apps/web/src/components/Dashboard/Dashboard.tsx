@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { CategoryInfo, MetricDef, MetricResponse } from "@ledashboard/shared";
 import type { TimeRange } from "../../hooks/useTimeRange";
 import { fetchCategories, fetchMetricDefinitions } from "../../lib/api";
@@ -10,9 +10,10 @@ import styles from "./Dashboard.module.css";
 type Props = {
   metricsData: Map<string, MetricResponse>;
   timeRange: TimeRange;
+  refreshing: boolean;
 };
 
-export default function Dashboard({ metricsData, timeRange }: Props) {
+export default function Dashboard({ metricsData, timeRange, refreshing }: Props) {
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [metricDefs, setMetricDefs] = useState<MetricDef[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -28,6 +29,30 @@ export default function Dashboard({ metricsData, timeRange }: Props) {
 
   const visibleMetrics = filteredDefs.filter((d) => metricsData.has(d.id));
 
+  const { groupedCards, ungroupedDefs } = useMemo(() => {
+    const groupMap = new Map<string, { primary: MetricDef; overlays: MetricDef[] }>();
+    const singletons: MetricDef[] = [];
+
+    for (const def of visibleMetrics) {
+      const group = def.labels?.group;
+      if (group) {
+        const key = `${def.sourceId}:${group}`;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { primary: def, overlays: [] });
+        } else {
+          groupMap.get(key)!.overlays.push(def);
+        }
+      } else {
+        singletons.push(def);
+      }
+    }
+
+    return {
+      groupedCards: Array.from(groupMap.values()),
+      ungroupedDefs: singletons,
+    };
+  }, [visibleMetrics]);
+
   if (visibleMetrics.length === 0) {
     return <EmptyState />;
   }
@@ -41,7 +66,26 @@ export default function Dashboard({ metricsData, timeRange }: Props) {
         onSelect={setSelectedCategory}
       />
       <div className={styles.grid}>
-        {visibleMetrics.map((def) => {
+        {groupedCards.map(({ primary, overlays }) => {
+          const data = metricsData.get(primary.id);
+          if (!data) return null;
+          const overlayIds = overlays
+            .map((o) => o.id)
+            .filter((id) => metricsData.has(id));
+          return (
+            <MetricChartCard
+              key={primary.id}
+              primaryMetric={primary}
+              primaryData={data}
+              allMetrics={filteredDefs}
+              allData={metricsData}
+              timeRange={timeRange}
+              initialOverlayIds={overlayIds}
+              refreshing={refreshing}
+            />
+          );
+        })}
+        {ungroupedDefs.map((def) => {
           const data = metricsData.get(def.id);
           if (!data) return null;
           return (
@@ -52,6 +96,7 @@ export default function Dashboard({ metricsData, timeRange }: Props) {
               allMetrics={filteredDefs}
               allData={metricsData}
               timeRange={timeRange}
+              refreshing={refreshing}
             />
           );
         })}

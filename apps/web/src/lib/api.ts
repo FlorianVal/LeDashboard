@@ -7,23 +7,24 @@ import type {
 
 const API_BASE = "/api";
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url);
+async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
   return response.json();
 }
 
-export function fetchMetricDefinitions(): Promise<MetricDef[]> {
-  return fetchJson<MetricDef[]>(`${API_BASE}/metrics`);
+export function fetchMetricDefinitions(signal?: AbortSignal): Promise<MetricDef[]> {
+  return fetchJson<MetricDef[]>(`${API_BASE}/metrics`, signal);
 }
 
 export function fetchMetricData(
   id: string,
   from: number,
   to: number,
-  window?: number
+  window?: number,
+  signal?: AbortSignal
 ): Promise<MetricResponse> {
   const params = new URLSearchParams({
     from: String(from),
@@ -33,7 +34,8 @@ export function fetchMetricData(
     params.set("window", String(window));
   }
   return fetchJson<MetricResponse>(
-    `${API_BASE}/metrics/${encodeURIComponent(id)}?${params}`
+    `${API_BASE}/metrics/${encodeURIComponent(id)}?${params}`,
+    signal
   );
 }
 

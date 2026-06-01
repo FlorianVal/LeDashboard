@@ -10,7 +10,10 @@ import styles from "./App.module.css";
 
 export default function App() {
   const { range, presets, setPreset } = useTimeRange("24h");
-  const { metricsData, loading, error, retry } = useMetrics(null, range);
+  const { metricsData, loading, refreshing, error, retry } = useMetrics(
+    null,
+    range
+  );
   const statuses = useSourcesStatus();
 
   return (
@@ -27,12 +30,16 @@ export default function App() {
       </header>
 
       <main className={styles.main}>
-        {loading ? (
+        {loading && metricsData.size === 0 ? (
           <LoadingSkeleton />
-        ) : error ? (
+        ) : error && metricsData.size === 0 ? (
           <ErrorState message={error} onRetry={retry} />
         ) : (
-          <Dashboard metricsData={metricsData} timeRange={range} />
+          <Dashboard
+            metricsData={metricsData}
+            timeRange={range}
+            refreshing={refreshing}
+          />
         )}
       </main>
     </div>

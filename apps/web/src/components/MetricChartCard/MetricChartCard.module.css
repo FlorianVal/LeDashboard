@@ -129,3 +129,39 @@
 .body {
   padding: var(--space-md) var(--space-md) var(--space-lg);
 }
+
+.bodyRefreshing {
+  position: relative;
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.refreshingOverlay {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-bg-elevated);
+  box-shadow: var(--shadow-soft);
+  pointer-events: none;
+}
+
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

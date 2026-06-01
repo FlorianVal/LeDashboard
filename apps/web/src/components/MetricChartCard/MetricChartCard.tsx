@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Plus, X } from "lucide-react";
 import type { MetricDef, MetricResponse } from "@ledashboard/shared";
 import type { TimeRange } from "../../hooks/useTimeRange";
+import { scaleSeriesData, formatValue } from "../../lib/format";
 import MetricChart from "../MetricChart/MetricChart";
 import styles from "./MetricChartCard.module.css";
 
@@ -22,6 +23,8 @@ type Props = {
   allMetrics: MetricDef[];
   allData: Map<string, MetricResponse>;
   timeRange: TimeRange;
+  initialOverlayIds?: string[];
+  refreshing?: boolean;
 };
 
 export default function MetricChartCard({
@@ -30,8 +33,10 @@ export default function MetricChartCard({
   allMetrics,
   allData,
   timeRange,
+  initialOverlayIds,
+  refreshing,
 }: Props) {
-  const [overlayIds, setOverlayIds] = useState<string[]>([]);
+  const [overlayIds, setOverlayIds] = useState<string[]>(initialOverlayIds ?? []);
   const [showPicker, setShowPicker] = useState(false);
 
   const sameCategoryMetrics = useMemo(
@@ -44,7 +49,7 @@ export default function MetricChartCard({
   );
 
   const series = useMemo(() => {
-    const result = [
+    const unscaled = [
       {
         id: primaryMetric.id,
         name: primaryMetric.displayName || primaryMetric.name,
@@ -58,7 +63,7 @@ export default function MetricChartCard({
       const data = allData.get(id);
       const def = allMetrics.find((m) => m.id === id);
       if (data && def) {
-        result.push({
+        unscaled.push({
           id: def.id,
           name: def.displayName || def.name,
           color: CHART_COLORS[(i + 1) % CHART_COLORS.length],
@@ -68,10 +73,14 @@ export default function MetricChartCard({
       }
     });
 
-    return result;
+    return unscaled.map((s) => {
+      const scaled = scaleSeriesData(s.data, s.unit);
+      return { ...s, data: scaled.data, unit: scaled.displayUnit };
+    });
   }, [primaryMetric, primaryData, overlayIds, allData, allMetrics]);
 
-  const latestValue = primaryData.samples[primaryData.samples.length - 1]?.avg;
+  const scaledPrimary = series[0];
+  const latestValue = scaledPrimary?.data[scaledPrimary.data.length - 1]?.avg;
 
   const addOverlay = (id: string) => {
     if (!overlayIds.includes(id)) {
@@ -93,7 +102,7 @@ export default function MetricChartCard({
           </h3>
           <span className={styles.unit}>
             {latestValue !== undefined
-              ? `${latestValue.toFixed(1)}${primaryMetric.unit ? ` ${primaryMetric.unit}` : ""}`
+              ? `${formatValue(latestValue, scaledPrimary.unit)}${scaledPrimary.unit ? ` ${scaledPrimary.unit}` : ""}`
               : "-"}
           </span>
         </div>
@@ -146,8 +155,13 @@ export default function MetricChartCard({
           )}
         </div>
       </div>
-      <div className={styles.body}>
+      <div className={refreshing ? `${styles.body} ${styles.bodyRefreshing}` : styles.body}>
         <MetricChart series={series} timeRange={timeRange} />
+        {refreshing && (
+          <div className={styles.refreshingOverlay} aria-hidden="true">
+            <span className={styles.spinner} />
+          </div>
+        )}
       </div>
     </div>
   );
