@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useMetrics } from "./hooks/useMetrics";
 import { useTimeRange } from "./hooks/useTimeRange";
 import { useSourcesStatus } from "./hooks/useSourcesStatus";
@@ -15,6 +16,10 @@ export default function App() {
     range
   );
   const statuses = useSourcesStatus();
+  const sourceNames = useMemo(
+    () => Object.fromEntries(statuses.map((s) => [s.id, s.name])),
+    [statuses]
+  );
 
   return (
     <div className={styles.shell}>
@@ -39,6 +44,7 @@ export default function App() {
             metricsData={metricsData}
             timeRange={range}
             refreshing={refreshing}
+            sourceNames={sourceNames}
           />
         )}
       </main>

@@ -25,6 +25,7 @@ type Props = {
   timeRange: TimeRange;
   initialOverlayIds?: string[];
   refreshing?: boolean;
+  sourceName?: string;
 };
 
 export default function MetricChartCard({
@@ -35,6 +36,7 @@ export default function MetricChartCard({
   timeRange,
   initialOverlayIds,
   refreshing,
+  sourceName,
 }: Props) {
   const [overlayIds, setOverlayIds] = useState<string[]>(initialOverlayIds ?? []);
   const [showPicker, setShowPicker] = useState(false);
@@ -97,6 +99,9 @@ export default function MetricChartCard({
     <div className={styles.card}>
       <div className={styles.header}>
         <div className={styles.headerInfo}>
+          {sourceName && (
+            <span className={styles.sourceLabel}>{sourceName}</span>
+          )}
           <h3 className={styles.title}>
             {primaryMetric.displayName || primaryMetric.name}
           </h3>

@@ -20,6 +20,15 @@
   gap: 2px;
 }
 
+.sourceLabel {
+  font-size: var(--font-caption);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1;
+}
+
 .title {
   margin: 0;
   font-size: var(--font-body);

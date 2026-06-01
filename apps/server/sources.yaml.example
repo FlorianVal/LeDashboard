@@ -12,24 +12,37 @@ sources:
       - name: node_load1
         category: system
         unit: load
+        group: load
       - name: node_load5
         category: system
         unit: load
+        group: load
       - name: node_load15
         category: system
         unit: load
+        group: load
       - name: node_memory_MemTotal_bytes
         category: system
         unit: bytes
+        group: memory
       - name: node_memory_MemAvailable_bytes
         category: system
         unit: bytes
+        group: memory
+      - name: node_memory_Active_bytes
+        category: system
+        unit: bytes
+        group: memory
       - name: node_network_receive_bytes_total
         category: network
         unit: bytes
+        # displayName: Réception Réseau
+        # group: network
       - name: node_network_transmit_bytes_total
         category: network
         unit: bytes
+        # displayName: Émission Réseau
+        # group: network
 
   - id: home-assistant
     name: Home Assistant
@@ -61,18 +74,27 @@ sources:
       - name: node_load1
         category: system
         unit: load
+        group: load
       - name: node_load5
         category: system
         unit: load
+        group: load
       - name: node_load15
         category: system
         unit: load
+        group: load
       - name: node_memory_MemTotal_bytes
         category: system
         unit: bytes
+        group: memory
       - name: node_memory_MemAvailable_bytes
         category: system
         unit: bytes
+        group: memory
+      - name: node_memory_Active_bytes
+        category: system
+        unit: bytes
+        group: memory
       - name: node_network_receive_bytes_total
         category: network
         unit: bytes

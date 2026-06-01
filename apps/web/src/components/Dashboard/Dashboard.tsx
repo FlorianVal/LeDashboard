@@ -11,9 +11,15 @@ type Props = {
   metricsData: Map<string, MetricResponse>;
   timeRange: TimeRange;
   refreshing: boolean;
+  sourceNames: Record<string, string>;
 };
 
-export default function Dashboard({ metricsData, timeRange, refreshing }: Props) {
+export default function Dashboard({
+  metricsData,
+  timeRange,
+  refreshing,
+  sourceNames,
+}: Props) {
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [metricDefs, setMetricDefs] = useState<MetricDef[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -82,6 +88,7 @@ export default function Dashboard({ metricsData, timeRange, refreshing }: Props)
               timeRange={timeRange}
               initialOverlayIds={overlayIds}
               refreshing={refreshing}
+              sourceName={sourceNames[primary.sourceId]}
             />
           );
         })}
@@ -97,6 +104,7 @@ export default function Dashboard({ metricsData, timeRange, refreshing }: Props)
               allData={metricsData}
               timeRange={timeRange}
               refreshing={refreshing}
+              sourceName={sourceNames[def.sourceId]}
             />
           );
         })}
