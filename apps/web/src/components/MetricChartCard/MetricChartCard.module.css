@@ -21,9 +21,9 @@
 }
 
 .sourceLabel {
-  font-size: var(--font-caption);
+  font-size: var(--font-label);
   font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   line-height: 1;

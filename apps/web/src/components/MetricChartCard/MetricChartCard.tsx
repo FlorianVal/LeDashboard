@@ -17,6 +17,11 @@ const CHART_COLORS = [
   "var(--color-chart-8)",
 ];
 
+const GROUP_LABELS: Record<string, string> = {
+  load: "Charge CPU",
+  memory: "Mémoire",
+};
+
 type Props = {
   primaryMetric: MetricDef;
   primaryData: MetricResponse;
@@ -84,6 +89,10 @@ export default function MetricChartCard({
   const scaledPrimary = series[0];
   const latestValue = scaledPrimary?.data[scaledPrimary.data.length - 1]?.avg;
 
+  const groupKey = primaryMetric.labels?.group;
+  const groupTitle = groupKey ? GROUP_LABELS[groupKey] : null;
+  const title = groupTitle ?? (primaryMetric.displayName || primaryMetric.name);
+
   const addOverlay = (id: string) => {
     if (!overlayIds.includes(id)) {
       setOverlayIds([...overlayIds, id]);
@@ -102,9 +111,7 @@ export default function MetricChartCard({
           {sourceName && (
             <span className={styles.sourceLabel}>{sourceName}</span>
           )}
-          <h3 className={styles.title}>
-            {primaryMetric.displayName || primaryMetric.name}
-          </h3>
+          <h3 className={styles.title}>{title}</h3>
           <span className={styles.unit}>
             {latestValue !== undefined
               ? `${formatValue(latestValue, scaledPrimary.unit)}${scaledPrimary.unit ? ` ${scaledPrimary.unit}` : ""}`
