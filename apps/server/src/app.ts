@@ -35,7 +35,7 @@ export function buildApp(options: BuildAppOptions = {}) {
              WHEN name LIKE '%node_network_transmit_bytes_total%' THEN 'Émission Réseau'
              ELSE display_name
            END
-       WHERE name LIKE 'node_network_%'
+       WHERE name LIKE '%node_network_%'
          AND category = 'auto'`
     )
     .run();
