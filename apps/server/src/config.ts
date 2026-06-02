@@ -47,6 +47,9 @@ const sourceConfigSchema = z.object({
             name: z.string(),
             category: z.string(),
             unit: z.string(),
+            attribute: z.string().optional(),
+            displayName: z.string().optional(),
+            group: z.string().optional(),
           })
         )
         .optional(),
@@ -56,6 +59,8 @@ const sourceConfigSchema = z.object({
             name: z.string(),
             category: z.string(),
             unit: z.string(),
+            displayName: z.string().optional(),
+            group: z.string().optional(),
           })
         )
         .optional(),

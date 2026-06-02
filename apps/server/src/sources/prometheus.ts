@@ -2,6 +2,17 @@ import type { MetricsSourceConfig, MetricDef } from "@ledashboard/shared";
 import type { MetricsAdapter, CollectedSample } from "./adapter.js";
 import { unixTimestamp } from "@ledashboard/shared";
 
+const DISPLAY_NAME_MAP: Record<string, string> = {
+  node_load1: "Charge CPU (1 min)",
+  node_load5: "Charge CPU (5 min)",
+  node_load15: "Charge CPU (15 min)",
+  node_memory_MemTotal_bytes: "Mémoire Totale",
+  node_memory_MemAvailable_bytes: "Mémoire Disponible",
+  node_memory_Active_bytes: "Mémoire Active",
+  node_network_receive_bytes_total: "Réception Réseau",
+  node_network_transmit_bytes_total: "Émission Réseau",
+};
+
 export class PrometheusAdapter implements MetricsAdapter {
   readonly sourceId: string;
   readonly type = "prometheus";
@@ -20,10 +31,10 @@ export class PrometheusAdapter implements MetricsAdapter {
         id,
         sourceId: this.sourceId,
         name: mc.name,
-        displayName: mc.name,
+        displayName: mc.displayName ?? DISPLAY_NAME_MAP[mc.name] ?? mc.name,
         category: mc.category,
         unit: mc.unit,
-        labels: {},
+        labels: mc.group ? { group: mc.group } : {},
       });
     }
     return defs;
@@ -67,9 +78,9 @@ export class PrometheusAdapter implements MetricsAdapter {
       if (isNaN(value)) continue;
 
       let metricId = `${this.sourceId}:${metricName}`;
+      let labels: Record<string, string> = {};
 
       if (labelsStr) {
-        const labels: Record<string, string> = {};
         const labelParts = labelsStr.split(",");
         for (const part of labelParts) {
           const eqIdx = part.indexOf("=");
@@ -86,7 +97,7 @@ export class PrometheusAdapter implements MetricsAdapter {
         }
       }
 
-      samples.push({ metricId, ts: now, value });
+      samples.push({ metricId, ts: now, value, labels });
     }
 
     return samples;

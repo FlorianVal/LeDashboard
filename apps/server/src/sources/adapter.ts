@@ -4,6 +4,7 @@ export type CollectedSample = {
   metricId: string;
   ts: number;
   value: number;
+  labels?: Record<string, string>;
 };
 
 export interface MetricsAdapter {

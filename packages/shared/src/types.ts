@@ -23,12 +23,16 @@ export type SensorConfig = {
   category: string;
   unit: string;
   attribute?: string;
+  displayName?: string;
+  group?: string;
 };
 
 export type MetricConfig = {
   name: string;
   category: string;
   unit: string;
+  displayName?: string;
+  group?: string;
 };
 
 export type SourcesConfig = {
