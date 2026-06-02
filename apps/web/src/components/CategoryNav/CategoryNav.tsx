@@ -15,12 +15,6 @@ export default function CategoryNav({
 }: Props) {
   return (
     <nav className={styles.nav}>
-      <button
-        className={`${styles.item} ${selected === null ? styles.active : ""}`}
-        onClick={() => onSelect(null)}
-      >
-        Tout
-      </button>
       {categories.map((cat) => (
         <button
           key={cat.name}
@@ -31,6 +25,12 @@ export default function CategoryNav({
           <span className={styles.count}>{cat.metricIds.length}</span>
         </button>
       ))}
+      <button
+        className={`${styles.item} ${selected === null ? styles.active : ""}`}
+        onClick={() => onSelect(null)}
+      >
+        Tout
+      </button>
     </nav>
   );
 }

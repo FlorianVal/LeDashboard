@@ -20,6 +20,8 @@ const CHART_COLORS = [
 const GROUP_LABELS: Record<string, string> = {
   load: "Charge CPU",
   memory: "Mémoire",
+  network_rx: "Réception Réseau",
+  network_tx: "Émission Réseau",
 };
 
 type Props = {

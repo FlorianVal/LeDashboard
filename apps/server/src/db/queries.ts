@@ -131,10 +131,21 @@ export function getCategories(ctx: DbContext): CategoryInfo[] {
     ids.push(def.id);
     grouped.set(def.category, ids);
   }
-  return Array.from(grouped.entries()).map(([name, metricIds]) => ({
-    name,
-    metricIds,
-  }));
+  const CATEGORY_ORDER = ["environment", "system", "network", "device"];
+
+  return Array.from(grouped.entries())
+    .sort((a, b) => {
+      const aIdx = CATEGORY_ORDER.indexOf(a[0]);
+      const bIdx = CATEGORY_ORDER.indexOf(b[0]);
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
+      return a[0].localeCompare(b[0]);
+    })
+    .map(([name, metricIds]) => ({
+      name,
+      metricIds,
+    }));
 }
 
 export function deleteSamplesOlderThan(

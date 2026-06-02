@@ -22,7 +22,7 @@ export default function Dashboard({
 }: Props) {
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [metricDefs, setMetricDefs] = useState<MetricDef[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>("environment");
 
   useEffect(() => {
     fetchCategories().then(setCategories).catch(() => {});

@@ -6,43 +6,46 @@ sources:
     url: http://localhost:9100/metrics
     interval: 60
     metrics:
-      - name: node_cpu_seconds_total
-        category: system
-        unit: seconds
       - name: node_load1
         category: system
         unit: load
         group: load
+        displayName: Charge CPU (1 min)
       - name: node_load5
         category: system
         unit: load
         group: load
+        displayName: Charge CPU (5 min)
       - name: node_load15
         category: system
         unit: load
         group: load
+        displayName: Charge CPU (15 min)
       - name: node_memory_MemTotal_bytes
         category: system
         unit: bytes
         group: memory
+        displayName: Mémoire Totale
       - name: node_memory_MemAvailable_bytes
         category: system
         unit: bytes
         group: memory
+        displayName: Mémoire Disponible
       - name: node_memory_Active_bytes
         category: system
         unit: bytes
         group: memory
+        displayName: Mémoire Active
       - name: node_network_receive_bytes_total
         category: network
         unit: bytes
-        # displayName: Réception Réseau
-        # group: network
+        group: network_rx
+        displayName: Réception Réseau
       - name: node_network_transmit_bytes_total
         category: network
         unit: bytes
-        # displayName: Émission Réseau
-        # group: network
+        group: network_tx
+        displayName: Émission Réseau
 
   - id: home-assistant
     name: Home Assistant
@@ -68,36 +71,43 @@ sources:
     url: http://100.100.172.55:9100/metrics
     interval: 60
     metrics:
-      - name: node_cpu_seconds_total
-        category: system
-        unit: seconds
       - name: node_load1
         category: system
         unit: load
         group: load
+        displayName: Charge CPU (1 min)
       - name: node_load5
         category: system
         unit: load
         group: load
+        displayName: Charge CPU (5 min)
       - name: node_load15
         category: system
         unit: load
         group: load
+        displayName: Charge CPU (15 min)
       - name: node_memory_MemTotal_bytes
         category: system
         unit: bytes
         group: memory
+        displayName: Mémoire Totale
       - name: node_memory_MemAvailable_bytes
         category: system
         unit: bytes
         group: memory
+        displayName: Mémoire Disponible
       - name: node_memory_Active_bytes
         category: system
         unit: bytes
         group: memory
+        displayName: Mémoire Active
       - name: node_network_receive_bytes_total
         category: network
         unit: bytes
+        group: network_rx
+        displayName: Réception Réseau
       - name: node_network_transmit_bytes_total
         category: network
         unit: bytes
+        group: network_tx
+        displayName: Émission Réseau

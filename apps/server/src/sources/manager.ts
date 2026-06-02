@@ -73,14 +73,38 @@ export class SourceManager {
             );
             for (const sample of samples) {
               if (!existingDefs.has(sample.metricId)) {
+                const labelRecord: Record<string, string> = sample.labels
+                  ? { ...sample.labels }
+                  : {};
+
+                // Extract base metric name from metricId: strip source prefix + label suffix
+                const withoutSource = sample.metricId.slice(
+                  source.id.length + 1
+                );
+                const colonIdx = withoutSource.indexOf(":");
+                const baseMetricName =
+                  colonIdx === -1
+                    ? withoutSource
+                    : withoutSource.slice(0, colonIdx);
+
+                const metricConfig = source.metrics?.find(
+                  (m) => m.name === baseMetricName
+                );
+
+                // Inherit group from base config
+                if (metricConfig?.group && !labelRecord.group) {
+                  labelRecord.group = metricConfig.group;
+                }
+
                 insertMetricDef(this.db, {
                   id: sample.metricId,
                   sourceId: source.id,
-                  name: sample.metricId,
-                  displayName: sample.metricId,
-                  category: "auto",
-                  unit: null,
-                  labelsJson: "{}",
+                  name: baseMetricName,
+                  displayName:
+                    metricConfig?.displayName ?? baseMetricName,
+                  category: metricConfig?.category ?? "auto",
+                  unit: metricConfig?.unit ?? null,
+                  labelsJson: JSON.stringify(labelRecord),
                 });
                 existingDefs.add(sample.metricId);
               }
