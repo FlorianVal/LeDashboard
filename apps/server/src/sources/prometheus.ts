@@ -24,20 +24,11 @@ export class PrometheusAdapter implements MetricsAdapter {
   }
 
   async initialize(): Promise<MetricDef[]> {
-    const defs: MetricDef[] = [];
-    for (const mc of this.config.metrics ?? []) {
-      const id = `${this.sourceId}:${mc.name}`;
-      defs.push({
-        id,
-        sourceId: this.sourceId,
-        name: mc.name,
-        displayName: mc.displayName ?? DISPLAY_NAME_MAP[mc.name] ?? mc.name,
-        category: mc.category,
-        unit: mc.unit,
-        labels: mc.group ? { group: mc.group } : {},
-      });
-    }
-    return defs;
+    // Les définitions Prometheus sont créées dynamiquement pendant la collecte,
+    // car les labels (ex: device=eth0) ne sont connus qu'au moment du parsing.
+    // Retourner des définitions statiques sans labels créerait des orphelines
+    // qui ne recevraient jamais d'échantillons.
+    return [];
   }
 
   async collect(): Promise<CollectedSample[]> {
