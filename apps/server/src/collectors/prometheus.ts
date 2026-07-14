@@ -23,6 +23,10 @@ const TARGET_METRICS = new Set([
   "node_filesystem_avail_bytes",
 ]);
 
+const LABEL_IDENTIFIER_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const PROMETHEUS_DECIMAL_PATTERN =
+  /^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$/;
+
 function parseLabels(input: string): Map<string, string> | undefined {
   const labels = new Map<string, string>();
   let index = 0;
@@ -32,7 +36,9 @@ function parseLabels(input: string): Map<string, string> | undefined {
     const nameStart = index;
     while (index < input.length && /[a-zA-Z0-9_]/.test(input[index])) index += 1;
     const name = input.slice(nameStart, index);
-    if (name === "" || input[index] !== "=") return undefined;
+    if (!LABEL_IDENTIFIER_PATTERN.test(name) || input[index] !== "=") {
+      return undefined;
+    }
     index += 1;
     if (input[index] !== '"') return undefined;
     index += 1;
@@ -83,6 +89,7 @@ function parsePrometheusText(text: string): ParsedSample[] {
       ? new Map<string, string>()
       : parseLabels(match[2]);
     if (labels === undefined) continue;
+    if (!PROMETHEUS_DECIMAL_PATTERN.test(match[3])) continue;
     samples.push({ name: match[1], labels, value: Number(match[3]) });
   }
   return samples;

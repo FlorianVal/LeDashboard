@@ -222,6 +222,52 @@ describe("MacMetricsCollector", () => {
   });
 
   it.each([
+    ["hexadecimal", "0x20"],
+    ["binary", "0b100000"],
+    ["octal", "0o40"],
+  ])("rejects a JS-coercible %s required numeric token", async (_label, token) => {
+    const collector = new MacMetricsCollector(
+      macConfig,
+      mutableTextFixture(macFixture({
+        cpu: `cpu_usage_active ${token}`,
+      })).fetchImpl,
+    );
+
+    await expect(collector.collect()).rejects.toThrow(/required Mac metric/);
+  });
+
+  it("rejects a required sample whose label name starts with a digit", async () => {
+    const collector = new MacMetricsCollector(
+      macConfig,
+      mutableTextFixture(macFixture({
+        cpu: 'cpu_usage_active{1cpu="total"} 38',
+      })).fetchImpl,
+    );
+
+    await expect(collector.collect()).rejects.toThrow(/required Mac metric/);
+  });
+
+  it("accepts signed decimal and scientific required numeric tokens", async () => {
+    const collector = new MacMetricsCollector(
+      macConfig,
+      mutableTextFixture(macFixture({
+        cpu: "cpu_usage_active +38.5",
+        memory: "mem_used_percent 6.1E+1",
+        disk: 'disk_used_percent{path="/"} .42e2',
+      })).fetchImpl,
+      () => 100,
+    );
+
+    const result = await collector.collect();
+
+    expect(result.samples.map(({ key, value }) => ({ key, value }))).toEqual([
+      { key: "mac.cpu_percent", value: 38.5 },
+      { key: "mac.memory_percent", value: 61 },
+      { key: "mac.disk_percent", value: 42 },
+    ]);
+  });
+
+  it.each([
     ["CPU", { cpu: "" }],
     ["CPU", { cpu: "cpu_usage_active NaN" }],
     ["memory", { memory: "" }],
