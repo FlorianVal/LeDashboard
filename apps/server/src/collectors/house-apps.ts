@@ -46,7 +46,11 @@ async function fetchJson(
   if (!isJson(response)) {
     throw new Error(`${sourceName} returned a non-JSON response`);
   }
-  return response.json();
+  try {
+    return await response.json();
+  } catch {
+    throw new Error(`${sourceName} returned malformed JSON`);
+  }
 }
 
 export class LaPlanteCollector {

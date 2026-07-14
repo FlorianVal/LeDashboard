@@ -67,7 +67,11 @@ export class HomeAssistantCollector {
     if (!isJson(response)) {
       throw new Error("Home Assistant returned a non-JSON response");
     }
-    return asRecord(await response.json());
+    try {
+      return asRecord(await response.json());
+    } catch {
+      throw new Error("Home Assistant returned malformed JSON");
+    }
   }
 
   async collect(): Promise<CollectionResult> {

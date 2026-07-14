@@ -240,4 +240,42 @@ describe("house application collectors", () => {
   ])("rejects successful non-JSON %s responses", async (_label, collector) => {
     await expect(collector.collect()).rejects.toThrow(/non-JSON response/);
   });
+
+  it.each([
+    {
+      source: "LaPlante",
+      bodySecret: "laplante-malformed-body-secret",
+      expectedMessage: "LaPlante returned malformed JSON",
+      createCollector(fetchImpl: typeof fetch) {
+        return new LaPlanteCollector(plantsConfig, fetchImpl);
+      },
+    },
+    {
+      source: "LeTimelapse",
+      bodySecret: "letimelapse-malformed-body-secret",
+      expectedMessage: "LeTimelapse returned malformed JSON",
+      createCollector(fetchImpl: typeof fetch) {
+        return new LeTimelapseCollector(timelapseConfig, fetchImpl);
+      },
+    },
+  ])("rejects malformed $source JSON without exposing its body", async ({
+    bodySecret,
+    expectedMessage,
+    createCollector,
+  }) => {
+    const fetchImpl: typeof fetch = async () => new Response(
+      `{"credential":"${bodySecret}"`,
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const collector = createCollector(fetchImpl);
+
+    const error = await collector.collect().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe(expectedMessage);
+    expect((error as Error).message).not.toContain(bodySecret);
+  });
 });

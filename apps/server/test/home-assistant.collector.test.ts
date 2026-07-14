@@ -204,4 +204,25 @@ describe("HomeAssistantCollector", () => {
       "Home Assistant returned a non-JSON response",
     );
   });
+
+  it("rejects malformed JSON without exposing the body, token, or URL", async () => {
+    const bodySecret = "ha-malformed-body-secret";
+    const fetchImpl: typeof fetch = async () => new Response(
+      `{"credential":"${bodySecret}"`,
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+    const collector = new HomeAssistantCollector(config, fetchImpl);
+
+    const error = await collector.collect().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message)
+      .toBe("Home Assistant returned malformed JSON");
+    expect((error as Error).message).not.toContain(bodySecret);
+    expect((error as Error).message).not.toContain(config.token);
+    expect((error as Error).message).not.toContain(config.url);
+  });
 });
