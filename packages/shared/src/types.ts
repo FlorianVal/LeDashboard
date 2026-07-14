@@ -37,9 +37,30 @@ export type ChartId =
 
 export type DashboardSeries = {
   key: MetricKey;
+  kind: "observed" | "projection";
   name: string;
   unit: string;
   samples: Sample[];
+};
+
+export type NumericSupportingFact = {
+  ts: number;
+  value: number;
+  unit: string;
+};
+
+export type TextSupportingFact = {
+  ts: number;
+  value: string;
+};
+
+export type DashboardSupportingFacts = {
+  weather: {
+    humidity: NumericSupportingFact | null;
+    pressure: NumericSupportingFact | null;
+    windSpeed: NumericSupportingFact | null;
+    condition: TextSupportingFact | null;
+  };
 };
 
 export type DashboardChart = {
@@ -54,6 +75,7 @@ export type DashboardResponse = {
   overallState: "healthy" | "degraded" | "down";
   charts: Record<ChartId, DashboardChart>;
   facts: Partial<Record<CurrentValueKey, CurrentValue>>;
+  supportingFacts: DashboardSupportingFacts;
   sources: Record<string, SourceFreshness>;
   activeIncidents: Incident[];
 };

@@ -93,6 +93,23 @@ function seedHourlyNasDays(
   }
 }
 
+function seedHourlyNasDay(
+  sqlite: ReturnType<typeof createDatabase>["sqlite"],
+  dayStart: number,
+  value: number,
+  hours = 24,
+): void {
+  const insert = sqlite.prepare(`
+    INSERT INTO samples_rollup
+      (metric_key, bucket_seconds, ts, avg, min, max)
+    VALUES (?, 3600, ?, ?, ?, ?)
+  `);
+  for (let hour = 0; hour < hours; hour += 1) {
+    const ts = dayStart + hour * 3_600;
+    insert.run("nas.storage_used_bytes", ts, value, value, value);
+  }
+}
+
 describe("curated dashboard routes", () => {
   it("returns healthy charts when one source is in error", async () => {
     const { now, repository, sources, build } = setup();
@@ -154,6 +171,7 @@ describe("curated dashboard routes", () => {
       "overallState",
       "charts",
       "facts",
+      "supportingFacts",
       "sources",
       "activeIncidents",
     ]);
@@ -174,11 +192,18 @@ describe("curated dashboard routes", () => {
     ]);
     expect(body.charts.plants.series[0].samples).toHaveLength(1);
     expect(body.charts.timelapseStorage.series[0].samples).toHaveLength(1);
+    expect(Object.values(body.charts).flatMap((chart: any) => chart.series))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: "observed" }),
+      ]));
+    expect(Object.values(body.charts).flatMap((chart: any) => chart.series)
+      .every((series: any) => series.kind === "observed")).toBe(true);
     expect(JSON.stringify(body)).not.toMatch(/Raspberry|categories/iu);
   });
 
   it("derives facts, source freshness, active incidents, and overall state from persisted state at now", async () => {
     const { now, repository, sources, incidents, build } = setup();
+    const nowSeconds = Math.floor(now.getTime() / 1_000);
     markAllSourcesSuccessful(sources, now.toISOString());
     sources.commitSuccess(
       "mac",
@@ -199,6 +224,11 @@ describe("curated dashboard routes", () => {
         numericValue: 30,
       },
     ]);
+    repository.insertSamples([
+      { key: "weather.humidity", ts: nowSeconds - 300, value: 50 },
+      { key: "weather.humidity", ts: nowSeconds, value: 53 },
+      { key: "weather.pressure", ts: nowSeconds - 60, value: 1_015 },
+    ]);
     const service = { id: "plex", name: "Plex" };
     const failed = {
       available: false,
@@ -218,6 +248,12 @@ describe("curated dashboard routes", () => {
     expect(body.facts["weather.condition"].textValue).toBe("sunny");
     expect(body.facts["plants.last_watered_on"].textValue).toBe("2026-07-13");
     expect(body.facts).not.toHaveProperty("timelapse.lastVideoAt");
+    expect(body.supportingFacts.weather).toEqual({
+      humidity: { ts: nowSeconds, value: 53, unit: "%" },
+      pressure: { ts: nowSeconds - 60, value: 1_015, unit: "hPa" },
+      windSpeed: null,
+      condition: { ts: 1, value: "sunny" },
+    });
     expect(body.sources.mac.state).toBe("stale");
     expect(body.sources["home-assistant"].state).toBe("fresh");
     expect(body.activeIncidents).toEqual([
@@ -286,6 +322,54 @@ describe("curated dashboard routes", () => {
     })).json();
     expect(body.sources.letimelapse.state).toBe("error");
     expect(body.overallState).toBe("down");
+  });
+
+  it("marks capture down when an error exists before any valid success", async () => {
+    const { now, repository, sources, build } = setup();
+    markAllSourcesSuccessful(sources, now.toISOString());
+    repository.setCurrentValues([
+      {
+        key: "timelapse.capture_last_error_at",
+        ts: 1,
+        textValue: "2026-07-14T11:59:45.000Z",
+      },
+      {
+        key: "timelapse.capture_expected_interval_seconds",
+        ts: 1,
+        numericValue: 30,
+      },
+    ]);
+
+    const body = (await build().inject({
+      method: "GET",
+      url: "/api/dashboard",
+    })).json();
+    expect(body.sources.letimelapse.state).toBe("error");
+    expect(body.overallState).toBe("down");
+  });
+
+  it.each([
+    { ageMs: 179_999, expected: "fresh" },
+    { ageMs: 180_000, expected: "stale" },
+    { ageMs: 180_001, expected: "stale" },
+  ])("uses exact milliseconds at the source freshness boundary ($ageMs ms)", async ({
+    ageMs,
+    expected,
+  }) => {
+    const now = new Date("2026-07-14T12:00:00.500Z");
+    const setupResult = setup(now);
+    markAllSourcesSuccessful(setupResult.sources, now.toISOString());
+    setupResult.sources.commitSuccess(
+      "mac",
+      new Date(now.getTime() - ageMs).toISOString(),
+      { samples: [], currentValues: [] },
+    );
+
+    const body = (await setupResult.build().inject({
+      method: "GET",
+      url: "/api/dashboard",
+    })).json();
+    expect(body.sources.mac.state).toBe(expected);
   });
 
   it("selects raw, five-minute, and hourly series and preserves missing intervals", async () => {
@@ -419,6 +503,17 @@ describe("curated dashboard routes", () => {
     const projection = growingBody.charts.nasStorage.series.find(
       (series: any) => series.name === "Projected usage",
     );
+    const observed = growingBody.charts.nasStorage.series.find(
+      (series: any) => series.name === "NAS storage used",
+    );
+    expect(observed).toMatchObject({
+      key: "nas.storage_used_bytes",
+      kind: "observed",
+    });
+    expect(projection).toMatchObject({
+      key: "nas.storage_used_bytes",
+      kind: "projection",
+    });
     expect(projection.samples).toHaveLength(2);
     expect(projection.samples[1].avg).toBeGreaterThan(projection.samples[0].avg);
 
@@ -430,5 +525,66 @@ describe("curated dashboard routes", () => {
     })).json();
     expect(shrinkingBody.charts.nasStorage.series.map((series: any) => series.name))
       .not.toContain("Projected usage");
+  });
+
+  it("selects older complete NAS days when recent hourly coverage is incomplete", async () => {
+    const setupResult = setup();
+    const startOfToday = Math.floor(
+      setupResult.now.getTime() / 1_000 / DAY,
+    ) * DAY;
+    for (let offset = 40; offset >= 34; offset -= 1) {
+      seedHourlyNasDay(
+        setupResult.ctx.sqlite,
+        startOfToday - offset * DAY,
+        1_000 + (40 - offset) * 100,
+      );
+    }
+    seedHourlyNasDay(
+      setupResult.ctx.sqlite,
+      startOfToday - DAY,
+      9_000,
+      23,
+    );
+
+    const body = (await setupResult.build().inject({
+      method: "GET",
+      url: "/api/dashboard",
+    })).json();
+    const projection = body.charts.nasStorage.series.find(
+      (series: any) => series.kind === "projection",
+    );
+    expect(projection.samples).toHaveLength(2);
+    expect(projection.samples[0].ts).toBe(startOfToday - 34 * DAY);
+  });
+
+  it("regresses NAS growth against actual UTC day offsets across a calendar gap", async () => {
+    const setupResult = setup();
+    const startOfToday = Math.floor(
+      setupResult.now.getTime() / 1_000 / DAY,
+    ) * DAY;
+    const offsets = [12, 11, 10, 8, 7, 6, 5];
+    for (const offset of offsets) {
+      seedHourlyNasDay(
+        setupResult.ctx.sqlite,
+        startOfToday - offset * DAY,
+        1_000 + (12 - offset) * 100,
+      );
+    }
+
+    const body = (await setupResult.build().inject({
+      method: "GET",
+      url: "/api/dashboard",
+    })).json();
+    const projection = body.charts.nasStorage.series.find(
+      (series: any) => series.kind === "projection",
+    );
+    expect(projection.samples[0]).toMatchObject({
+      ts: startOfToday - 5 * DAY,
+      avg: 1_700,
+    });
+    expect(projection.samples[1]).toMatchObject({
+      ts: startOfToday + 25 * DAY,
+      avg: 4_700,
+    });
   });
 });

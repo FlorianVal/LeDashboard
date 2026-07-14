@@ -3,6 +3,8 @@ import type {
   CurrentValueKey,
   DashboardChart,
   DashboardResponse,
+  DashboardSeries,
+  DashboardSupportingFacts,
   MetricKey,
   SourceFreshness,
 } from "@ledashboard/shared";
@@ -102,7 +104,7 @@ function sourceFreshness(
   sourceId: string,
   staleAfterSeconds: number,
   sourceRepository: SourceRepository,
-  nowSeconds: number,
+  nowMilliseconds: number,
 ): SourceFreshness {
   const persisted = sourceRepository.getSourceState(sourceId);
   if (persisted?.lastError !== null && persisted?.lastError !== undefined) {
@@ -113,13 +115,13 @@ function sourceFreshness(
     };
   }
 
-  const lastSuccessSeconds = persisted?.lastSuccessAt === null
+  const lastSuccessMilliseconds = persisted?.lastSuccessAt === null
     || persisted?.lastSuccessAt === undefined
     ? Number.NaN
-    : Date.parse(persisted.lastSuccessAt) / 1_000;
+    : Date.parse(persisted.lastSuccessAt);
   return {
-    state: Number.isFinite(lastSuccessSeconds)
-        && nowSeconds - lastSuccessSeconds <= staleAfterSeconds
+    state: Number.isFinite(lastSuccessMilliseconds)
+        && nowMilliseconds - lastSuccessMilliseconds < staleAfterSeconds * 1_000
       ? "fresh"
       : "stale",
     lastSuccessAt: persisted?.lastSuccessAt ?? null,
@@ -130,7 +132,7 @@ function sourceFreshness(
 function buildSources(
   definitions: ReadonlyMap<MetricKey, MetricDefinition>,
   sourceRepository: SourceRepository,
-  nowSeconds: number,
+  nowMilliseconds: number,
 ): Record<string, SourceFreshness> {
   return Object.fromEntries(SOURCE_IDS.map((sourceId) => {
     const thresholds = Array.from(definitions.values())
@@ -141,7 +143,7 @@ function buildSources(
       sourceId,
       staleAfterSeconds,
       sourceRepository,
-      nowSeconds,
+      nowMilliseconds,
     )];
   }));
 }
@@ -155,7 +157,7 @@ function nasCompleteDays(
   const startOfToday = Math.floor(nowSeconds / DAY) * DAY;
   const hourly = repository.getSeries(
     "nas.storage_used_bytes",
-    startOfToday - 30 * DAY,
+    startOfToday - 180 * DAY,
     startOfToday - 1,
     "1h",
   );
@@ -176,7 +178,8 @@ function nasCompleteDays(
       ts,
       value: Array.from(hours.values()).reduce((sum, value) => sum + value, 0)
         / hours.size,
-    }));
+    }))
+    .slice(-30);
 }
 
 function nasProjection(
@@ -186,13 +189,15 @@ function nasProjection(
   const daily = nasCompleteDays(repository, nowSeconds);
   if (daily.length < 7) return null;
 
-  const meanX = (daily.length - 1) / 2;
+  const firstTimestamp = daily[0].ts;
+  const xValues = daily.map((point) => (point.ts - firstTimestamp) / DAY);
+  const meanX = xValues.reduce((sum, value) => sum + value, 0) / xValues.length;
   const meanY = daily.reduce((sum, point) => sum + point.value, 0) / daily.length;
   let numerator = 0;
   let denominator = 0;
   for (let index = 0; index < daily.length; index += 1) {
-    numerator += (index - meanX) * (daily[index].value - meanY);
-    denominator += (index - meanX) ** 2;
+    numerator += (xValues[index] - meanX) * (daily[index].value - meanY);
+    denominator += (xValues[index] - meanX) ** 2;
   }
   const dailyGrowth = numerator / denominator;
   if (!Number.isFinite(dailyGrowth) || dailyGrowth <= 0) return null;
@@ -201,6 +206,7 @@ function nasProjection(
   const projected = latest.value + dailyGrowth * 30;
   return {
     key: "nas.storage_used_bytes" as const,
+    kind: "projection" as const,
     name: "Projected usage",
     unit: "bytes",
     samples: [
@@ -223,11 +229,12 @@ function buildCharts(
   return Object.fromEntries(CHART_DEFINITIONS.map((chart) => {
     const from = nowSeconds - chart.windowSeconds;
     const resolution = resolutionForRange(chart.windowSeconds);
-    const series = chart.series.map((key) => {
+    const series: DashboardSeries[] = chart.series.map((key) => {
       const definition = definitions.get(key);
       if (!definition) throw new Error(`Missing metric definition: ${key}`);
       return {
         key,
+        kind: "observed" as const,
         name: definition.displayName,
         unit: definition.unit,
         samples: repository.getSeries(key, from, nowSeconds, resolution),
@@ -253,10 +260,36 @@ function buildFacts(repository: MetricsRepository) {
   }));
 }
 
+function buildSupportingFacts(
+  repository: MetricsRepository,
+  definitions: ReadonlyMap<MetricKey, MetricDefinition>,
+  nowSeconds: number,
+): DashboardSupportingFacts {
+  const numericFact = (key: MetricKey) => {
+    const sample = repository.getLatestSample(key, nowSeconds);
+    const definition = definitions.get(key);
+    return sample === null || definition === undefined
+      ? null
+      : { ts: sample.ts, value: sample.avg, unit: definition.unit };
+  };
+  const condition = repository.getCurrentValue("weather.condition");
+  return {
+    weather: {
+      humidity: numericFact("weather.humidity"),
+      pressure: numericFact("weather.pressure"),
+      windSpeed: numericFact("weather.wind_speed"),
+      condition: condition?.textValue === null
+          || condition?.textValue === undefined
+        ? null
+        : { ts: condition.ts, value: condition.textValue },
+    },
+  };
+}
+
 function applyCaptureFreshness(
   repository: MetricsRepository,
   sources: Record<string, SourceFreshness>,
-  nowSeconds: number,
+  nowMilliseconds: number,
 ): "healthy" | "degraded" | "down" {
   const lastSuccess = repository
     .getCurrentValue("timelapse.capture_last_success_at")?.textValue;
@@ -265,13 +298,22 @@ function applyCaptureFreshness(
   const expectedInterval = repository
     .getCurrentValue("timelapse.capture_expected_interval_seconds")
     ?.numericValue;
-  const lastSuccessSeconds = lastSuccess === null || lastSuccess === undefined
+  const lastSuccessMilliseconds = lastSuccess === null || lastSuccess === undefined
     ? Number.NaN
-    : Date.parse(lastSuccess) / 1_000;
-  const lastErrorSeconds = lastError === null || lastError === undefined
+    : Date.parse(lastSuccess);
+  const lastErrorMilliseconds = lastError === null || lastError === undefined
     ? Number.NaN
-    : Date.parse(lastError) / 1_000;
-  if (!Number.isFinite(lastSuccessSeconds)
+    : Date.parse(lastError);
+  if (Number.isFinite(lastErrorMilliseconds)
+      && !Number.isFinite(lastSuccessMilliseconds)) {
+    sources.letimelapse = {
+      ...sources.letimelapse,
+      state: "error",
+      lastError: "Timelapse capture is down",
+    };
+    return "down";
+  }
+  if (!Number.isFinite(lastSuccessMilliseconds)
       || expectedInterval === null
       || expectedInterval === undefined
       || !Number.isFinite(expectedInterval)
@@ -279,9 +321,10 @@ function applyCaptureFreshness(
     return "healthy";
   }
 
-  const missedSeconds = Math.max(0, nowSeconds - lastSuccessSeconds);
-  const down = (Number.isFinite(lastErrorSeconds) && lastErrorSeconds > lastSuccessSeconds)
-    || missedSeconds >= 6 * expectedInterval;
+  const missedMilliseconds = Math.max(0, nowMilliseconds - lastSuccessMilliseconds);
+  const down = (Number.isFinite(lastErrorMilliseconds)
+      && lastErrorMilliseconds > lastSuccessMilliseconds)
+    || missedMilliseconds >= 6 * expectedInterval * 1_000;
   if (down) {
     sources.letimelapse = {
       ...sources.letimelapse,
@@ -290,7 +333,7 @@ function applyCaptureFreshness(
     };
     return "down";
   }
-  if (missedSeconds >= 3 * expectedInterval) {
+  if (missedMilliseconds >= 3 * expectedInterval * 1_000) {
     if (sources.letimelapse.state === "fresh") {
       sources.letimelapse = {
         ...sources.letimelapse,
@@ -316,16 +359,17 @@ export function registerDashboardRoutes(
 ): void {
   app.get("/api/dashboard", async (): Promise<DashboardResponse> => {
     const now = dependencies.now();
+    const nowMilliseconds = now.getTime();
     const nowSeconds = Math.floor(now.getTime() / 1_000);
     const sources = buildSources(
       dependencies.metricDefinitions,
       dependencies.sourceRepository,
-      nowSeconds,
+      nowMilliseconds,
     );
     const captureState = applyCaptureFreshness(
       dependencies.repository,
       sources,
-      nowSeconds,
+      nowMilliseconds,
     );
     const activeIncidents = dependencies.incidentRepository.getActiveIncidents();
     const overallState = activeIncidents.length > 0 || captureState === "down"
@@ -344,17 +388,22 @@ export function registerDashboardRoutes(
         nowSeconds,
       ),
       facts: buildFacts(dependencies.repository),
+      supportingFacts: buildSupportingFacts(
+        dependencies.repository,
+        dependencies.metricDefinitions,
+        nowSeconds,
+      ),
       sources,
       activeIncidents,
     };
   });
 
   app.get("/api/sources", async () => {
-    const nowSeconds = Math.floor(dependencies.now().getTime() / 1_000);
+    const nowMilliseconds = dependencies.now().getTime();
     return buildSources(
       dependencies.metricDefinitions,
       dependencies.sourceRepository,
-      nowSeconds,
+      nowMilliseconds,
     );
   });
 }

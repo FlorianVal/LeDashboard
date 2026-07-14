@@ -90,6 +90,25 @@ export class MetricsRepository {
     return rows;
   }
 
+  getLatestSample(key: MetricKey, to: number): Sample | null {
+    const row = this.sqlite.prepare(`
+      SELECT ts, avg, min, max
+      FROM (
+        SELECT ts, value AS avg, value AS min, value AS max, 3 AS priority
+        FROM samples_raw
+        WHERE metric_key = ? AND ts <= ?
+        UNION ALL
+        SELECT ts, avg, min, max,
+          CASE bucket_seconds WHEN 300 THEN 2 ELSE 1 END AS priority
+        FROM samples_rollup
+        WHERE metric_key = ? AND ts <= ?
+      )
+      ORDER BY ts DESC, priority DESC
+      LIMIT 1
+    `).get(key, to, key, to) as Sample | undefined;
+    return row ?? null;
+  }
+
   getCurrentValue(key: CurrentValueKey): CurrentValue | null {
     const row = this.sqlite.prepare(`
       SELECT key, ts, numeric_value, text_value
