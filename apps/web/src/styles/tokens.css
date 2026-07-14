@@ -1,14 +1,27 @@
 :root {
+  --house-canvas: #f1efe7;
+  --house-surface: rgba(255, 255, 255, 0.78);
+  --house-ink: #1a2d24;
+  --house-muted: #718078;
+  --house-green: #246d4e;
+  --house-green-soft: #dcecdf;
+  --house-border: rgba(42, 74, 57, 0.14);
+  --house-warning: #ad6b27;
+  --house-error: #a9473f;
+  --house-radius: 18px;
+  --house-shadow: 0 18px 55px rgba(42, 74, 57, .075);
+  --font-serif: Georgia, "Times New Roman", serif;
+
   /* Background */
-  --color-bg-primary: #f7faf6;
-  --color-bg-secondary: #ffffff;
+  --color-bg-primary: var(--house-canvas);
+  --color-bg-secondary: var(--house-surface);
   --color-bg-elevated: #ffffff;
-  --color-bg-wash: #edf6ee;
+  --color-bg-wash: var(--house-green-soft);
 
   /* Accent */
-  --color-accent: #177a47;
-  --color-accent-strong: #0f5132;
-  --color-accent-light: #dff3e6;
+  --color-accent: var(--house-green);
+  --color-accent-strong: var(--house-ink);
+  --color-accent-light: var(--house-green-soft);
 
   /* Chart series */
   --color-chart-1: #177a47;
@@ -21,18 +34,18 @@
   --color-chart-8: #65a30d;
 
   /* Text */
-  --color-text-primary: #17211b;
-  --color-text-secondary: #607267;
-  --color-text-muted: #87938b;
+  --color-text-primary: var(--house-ink);
+  --color-text-secondary: var(--house-muted);
+  --color-text-muted: var(--house-muted);
 
   /* Border */
-  --color-border: #dbe7de;
-  --color-border-strong: #b7cbbb;
+  --color-border: var(--house-border);
+  --color-border-strong: rgba(42, 74, 57, .28);
 
   /* States */
-  --color-success: #177a47;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
+  --color-success: var(--house-green);
+  --color-warning: var(--house-warning);
+  --color-error: var(--house-error);
   --color-offline: #a1a1aa;
 
   /* Shadows */

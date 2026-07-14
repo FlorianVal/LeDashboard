@@ -1,4 +1,5 @@
 import type {
+  DashboardResponse,
   MetricDef,
   MetricResponse,
   CategoryInfo,
@@ -13,6 +14,10 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }
   return response.json();
+}
+
+export function fetchDashboard(signal?: AbortSignal): Promise<DashboardResponse> {
+  return fetchJson<DashboardResponse>(`${API_BASE}/dashboard`, signal);
 }
 
 export function fetchMetricDefinitions(signal?: AbortSignal): Promise<MetricDef[]> {

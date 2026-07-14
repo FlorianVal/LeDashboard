@@ -1,53 +1,58 @@
 .shell {
-  max-width: 1280px;
+  width: min(100%, 1420px);
   margin: 0 auto;
-  padding: var(--space-lg);
+  padding: 28px clamp(18px, 4vw, 58px) 72px;
   min-height: 100vh;
 }
 
-.header {
-  margin-bottom: var(--space-xl);
-}
-
-.headerTop {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-  margin-bottom: var(--space-md);
-}
-
 .kicker {
-  display: inline-block;
-  font-size: var(--font-caption);
-  font-weight: var(--font-weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--color-accent);
-  background: var(--color-accent-light);
-  padding: 2px 10px;
-  border-radius: 999px;
-  margin-bottom: var(--space-xs);
-}
-
-.title {
   margin: 0;
-  font-size: var(--font-display);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text-primary);
-  line-height: var(--line-height-heading);
+  color: var(--house-error);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .14em;
+  text-transform: uppercase;
 }
 
-.main {
-  min-height: 400px;
+.main { min-width: 0; min-height: 70vh; }
+
+.loading {
+  display: grid;
+  min-height: 72vh;
+  place-items: center;
+  align-content: center;
+  gap: 16px;
+  color: var(--house-muted);
+  font-family: var(--font-serif);
+  font-size: 1.25rem;
 }
 
-@media (max-width: 720px) {
+.loading span { width: 42px; height: 42px; border: 1px solid var(--house-border); border-top-color: var(--house-green); border-radius: 50%; animation: turn 1s linear infinite; }
+.loading p { margin: 0; }
+
+.failure {
+  display: grid;
+  max-width: 680px;
+  min-height: 72vh;
+  margin: 0 auto;
+  place-content: center;
+  text-align: center;
+}
+
+.failure h1 { margin: 8px 0 12px; color: var(--house-ink); font-family: var(--font-serif); font-size: clamp(2.5rem, 7vw, 4.8rem); font-weight: 400; letter-spacing: -.05em; line-height: .98; }
+.failure > p:not(.kicker) { margin: 0; color: var(--house-muted); }
+.failure button { justify-self: center; margin-top: 26px; padding: 11px 18px; border: 1px solid var(--house-green); border-radius: 999px; background: var(--house-green); color: white; cursor: pointer; font-weight: 700; }
+.failure button:focus-visible { outline: 3px solid rgba(36, 109, 78, .25); outline-offset: 3px; }
+.failure button:disabled { cursor: wait; opacity: .55; }
+
+@keyframes turn { to { transform: rotate(360deg); } }
+
+@media (max-width: 560px) {
   .shell {
-    padding: var(--space-md);
+    padding: 16px 12px 52px;
   }
+}
 
-  .headerTop {
-    flex-direction: column;
-  }
+@media (prefers-reduced-motion: reduce) {
+  .loading span { animation: none; }
 }

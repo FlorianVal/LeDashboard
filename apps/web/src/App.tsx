@@ -1,50 +1,31 @@
-import { useMemo } from "react";
-import { useMetrics } from "./hooks/useMetrics";
-import { useTimeRange } from "./hooks/useTimeRange";
-import { useSourcesStatus } from "./hooks/useSourcesStatus";
-import TimeRangeSelector from "./components/TimeRangeSelector/TimeRangeSelector";
-import SourceStatusBar from "./components/SourceStatusBar/SourceStatusBar";
-import Dashboard from "./components/Dashboard/Dashboard";
-import LoadingSkeleton from "./components/LoadingSkeleton/LoadingSkeleton";
-import ErrorState from "./components/ErrorState/ErrorState";
+import EditorialDashboard from "./components/EditorialDashboard/EditorialDashboard";
+import { useDashboard } from "./hooks/useDashboard";
 import styles from "./App.module.css";
 
 export default function App() {
-  const { range, presets, setPreset } = useTimeRange("24h");
-  const { metricsData, loading, refreshing, error, retry } = useMetrics(
-    null,
-    range
-  );
-  const statuses = useSourcesStatus();
-  const sourceNames = useMemo(
-    () => Object.fromEntries(statuses.map((s) => [s.id, s.name])),
-    [statuses]
-  );
+  const { data, error, refreshing, retry } = useDashboard();
 
   return (
     <div className={styles.shell}>
-      <header className={styles.header}>
-        <div className={styles.headerTop}>
-          <div>
-            <span className={styles.kicker}>Maison</span>
-            <h1 className={styles.title}>Metriques</h1>
-          </div>
-          <TimeRangeSelector presets={presets} onSelect={setPreset} />
-        </div>
-        <SourceStatusBar statuses={statuses} />
-      </header>
-
       <main className={styles.main}>
-        {loading && metricsData.size === 0 ? (
-          <LoadingSkeleton />
-        ) : error && metricsData.size === 0 ? (
-          <ErrorState message={error} onRetry={retry} />
+        {!data && !error ? (
+          <div className={styles.loading} role="status">
+            <span aria-hidden="true" />
+            <p>Préparation du panorama…</p>
+          </div>
+        ) : !data ? (
+          <section className={styles.failure} aria-labelledby="failure-title">
+            <p className={styles.kicker}>La maison reste silencieuse</p>
+            <h1 id="failure-title">Le panorama ne répond pas</h1>
+            <p>{error}</p>
+            <button type="button" onClick={() => void retry()} disabled={refreshing}>Réessayer</button>
+          </section>
         ) : (
-          <Dashboard
-            metricsData={metricsData}
-            timeRange={range}
+          <EditorialDashboard
+            data={data}
+            error={error}
             refreshing={refreshing}
-            sourceNames={sourceNames}
+            onRetry={() => void retry()}
           />
         )}
       </main>
