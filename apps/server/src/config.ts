@@ -16,6 +16,52 @@ const serverConfigSchema = z.object({
 
 export type ServerConfig = z.infer<typeof serverConfigSchema>;
 
+const endpointConfigSchema = z.object({
+  url: z.string().url(),
+  intervalSeconds: z.number().int().positive(),
+}).strict();
+
+const homeAssistantConfigSchema = endpointConfigSchema.extend({
+  token: z.string().min(1),
+});
+
+const macConfigSchema = endpointConfigSchema.extend({
+  username: z.string().min(1),
+  password: z.string().min(1),
+  interface: z.string().min(1),
+});
+
+const nasConfigSchema = endpointConfigSchema.extend({
+  mountpoint: z.string().startsWith("/"),
+});
+
+const serviceConfigSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  url: z.string().url(),
+  expectedStatuses: z.array(
+    z.number().int().min(100).max(599),
+  ).min(1),
+  latencyThresholdMs: z.number().int().positive(),
+  tlsInsecure: z.boolean().default(false),
+}).strict();
+
+const curatedSourcesConfigSchema = z.object({
+  homeAssistant: homeAssistantConfigSchema,
+  laPlante: endpointConfigSchema,
+  leTimelapse: endpointConfigSchema,
+  mac: macConfigSchema,
+  nas: nasConfigSchema,
+  services: z.array(serviceConfigSchema),
+}).strict();
+
+export type EndpointConfig = z.infer<typeof endpointConfigSchema>;
+export type HomeAssistantConfig = z.infer<typeof homeAssistantConfigSchema>;
+export type MacConfig = z.infer<typeof macConfigSchema>;
+export type NasConfig = z.infer<typeof nasConfigSchema>;
+export type ServiceConfig = z.infer<typeof serviceConfigSchema>;
+export type CuratedSourcesConfig = z.infer<typeof curatedSourcesConfigSchema>;
+
 export function loadServerConfig(): ServerConfig {
   return serverConfigSchema.parse({
     host: process.env.HOST,
@@ -23,6 +69,38 @@ export function loadServerConfig(): ServerConfig {
     databasePath: process.env.DATABASE_PATH,
     sourcesPath: process.env.SOURCES_PATH,
   });
+}
+
+export function interpolateEnv(raw: string): string {
+  return raw.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, name: string) => {
+    const value = process.env[name];
+    if (value === undefined) {
+      throw new Error(`Missing environment variable: ${name}`);
+    }
+    return value;
+  });
+}
+
+function interpolateConfigValue(value: unknown): unknown {
+  if (typeof value === "string") return interpolateEnv(value);
+  if (Array.isArray(value)) return value.map(interpolateConfigValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        interpolateConfigValue(item),
+      ]),
+    );
+  }
+  return value;
+}
+
+export function loadCuratedSourcesConfig(path: string): CuratedSourcesConfig {
+  if (!existsSync(path)) {
+    throw new Error(`Curated sources config not found at ${path}`);
+  }
+  const parsed = parseYaml(readFileSync(path, "utf-8"));
+  return curatedSourcesConfigSchema.parse(interpolateConfigValue(parsed));
 }
 
 const sourceConfigSchema = z.object({
