@@ -110,26 +110,12 @@ export class SourceRepository {
   }
 }
 
-function sanitizedMessage(cause: unknown): string {
-  const message = cause instanceof Error ? cause.message : String(cause);
-  return message
-    .replace(/\b(Bearer|Basic)\s+\S+/gi, "$1 [redacted]")
-    .replace(/(https?:\/\/)[^@\s/]+@/gi, "$1[redacted]@")
-    .replace(
-      /([?&](?:access_token|api_key|password|secret|token)=)[^&#\s]+/gi,
-      "$1[redacted]",
-    )
-    .replace(
-      /\b(authorization|password|secret|token)\s*[:=]\s*[^\s,;]+/gi,
-      "$1=[redacted]",
-    );
-}
-
 export class SourceManager {
   private readonly intervals = new Map<
     string,
     ReturnType<typeof setInterval>
   >();
+  private readonly inFlight = new Set<string>();
 
   constructor(
     private readonly repository: SourceRepository,
@@ -140,17 +126,36 @@ export class SourceManager {
     const attemptedAt = this.now().toISOString();
     this.repository.recordAttempt(collector.id, attemptedAt);
 
+    let result: CollectionResult;
     try {
-      const result = await collector.collect();
-      if (collector.requiresSamples && result.samples.length === 0) {
-        throw new Error(`${collector.id} returned no required samples`);
-      }
-      this.repository.commitSuccess(collector.id, attemptedAt, result);
-    } catch (cause) {
-      const error = new Error(sanitizedMessage(cause));
+      result = await collector.collect();
+    } catch {
+      const error = new Error(`Collection failed for ${collector.id}`);
       this.repository.recordFailure(collector.id, attemptedAt, error.message);
       throw error;
     }
+
+    if (collector.requiresSamples && result.samples.length === 0) {
+      const error = new Error(`${collector.id} returned no required samples`);
+      this.repository.recordFailure(collector.id, attemptedAt, error.message);
+      throw error;
+    }
+
+    try {
+      this.repository.commitSuccess(collector.id, attemptedAt, result);
+    } catch {
+      const error = new Error(`Collection failed for ${collector.id}`);
+      this.repository.recordFailure(collector.id, attemptedAt, error.message);
+      throw error;
+    }
+  }
+
+  private runScheduled(collector: Collector): void {
+    if (this.inFlight.has(collector.id)) return;
+    this.inFlight.add(collector.id);
+    void this.runOnce(collector)
+      .catch(() => undefined)
+      .finally(() => this.inFlight.delete(collector.id));
   }
 
   start(collectors: readonly Collector[]): void {
@@ -158,9 +163,7 @@ export class SourceManager {
       const existing = this.intervals.get(collector.id);
       if (existing) clearInterval(existing);
 
-      const run = () => {
-        void this.runOnce(collector).catch(() => undefined);
-      };
+      const run = () => this.runScheduled(collector);
 
       run();
       this.intervals.set(

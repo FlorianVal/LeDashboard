@@ -61,6 +61,14 @@ function countedCollector(
 
 const emptyResult: CollectionResult = { samples: [], currentValues: [] };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 describe("SourceManager", () => {
   it("marks an empty required collection as failed", async () => {
     const { manager, repository } = setup();
@@ -138,6 +146,27 @@ describe("SourceManager", () => {
     expect(slowCollect).toHaveBeenCalledTimes(2);
   });
 
+  it("does not overlap a slow collector with its next scheduled tick", async () => {
+    vi.useFakeTimers();
+    const { manager } = setup();
+    const firstRun = deferred<CollectionResult>();
+    const collect = vi.fn()
+      .mockImplementationOnce(() => firstRun.promise)
+      .mockResolvedValue(emptyResult);
+
+    manager.start([countedCollector("slow", 5, collect)]);
+    expect(collect).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(collect).toHaveBeenCalledTimes(1);
+
+    firstRun.resolve(emptyResult);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(collect).toHaveBeenCalledTimes(2);
+  });
+
   it("isolates a failed collector from healthy scheduled collectors", async () => {
     vi.useFakeTimers();
     const { manager, repository } = setup();
@@ -155,7 +184,7 @@ describe("SourceManager", () => {
     expect(failedCollect).toHaveBeenCalledTimes(1);
     expect(healthyCollect).toHaveBeenCalledTimes(1);
     expect(repository.getSourceState("failed")?.lastError)
-      .toBe("connection refused");
+      .toBe("Collection failed for failed");
     expect(repository.getSourceState("healthy")?.lastSuccessAt)
       .toBe("2026-07-14T12:00:00.000Z");
   });
@@ -175,22 +204,85 @@ describe("SourceManager", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("redacts credentials from failures and does not log them", async () => {
+  it("restarts once without retaining stopped or duplicate intervals", async () => {
+    vi.useFakeTimers();
+    const { manager } = setup();
+    const collect = vi.fn(async () => emptyResult);
+    const collector = countedCollector("restartable", 5, collect);
+
+    manager.start([collector]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(collect).toHaveBeenCalledTimes(1);
+
+    manager.stop();
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(collect).toHaveBeenCalledTimes(1);
+
+    manager.start([collector]);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(collect).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(collect).toHaveBeenCalledTimes(5);
+    expect(vi.getTimerCount()).toBe(1);
+  });
+
+  it.each([
+    {
+      label: "JSON token",
+      raw: 'request failed: {"token":"json-secret"}',
+      secrets: ["json-secret"],
+    },
+    {
+      label: "quoted multi-word password",
+      raw: 'password="quoted multi word secret"',
+      secrets: ["quoted multi word secret"],
+    },
+    {
+      label: "client_secret field",
+      raw: "client_secret=client-secret-value",
+      secrets: ["client-secret-value"],
+    },
+    {
+      label: "URL userinfo",
+      raw: "https://service-user:url-password@example.test/data failed",
+      secrets: ["service-user", "url-password"],
+    },
+    {
+      label: "Bearer header",
+      raw: "Authorization: Bearer bearer-secret-value",
+      secrets: ["bearer-secret-value"],
+    },
+    {
+      label: "query parameters",
+      raw: "https://example.test/data?token=query-token&password=query-password",
+      secrets: ["query-token", "query-password"],
+    },
+  ])("never exposes an untrusted $label collector error", async ({ raw, secrets }) => {
     const { manager, repository } = setup();
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const collector = countedCollector("secret-source", 5, async () => {
-      throw new Error(
-        "Bearer bearer-secret failed at https://user:password-secret@example.test/data?token=query-secret&password=other-secret",
-      );
+      throw new Error(raw);
     });
 
-    await expect(manager.runOnce(collector)).rejects.toThrow("[redacted]");
+    let thrown = "";
+    try {
+      await manager.runOnce(collector);
+    } catch (cause) {
+      thrown = cause instanceof Error ? cause.message : String(cause);
+    }
 
     const storedError = repository.getSourceState("secret-source")?.lastError ?? "";
-    expect(storedError).not.toContain("bearer-secret");
-    expect(storedError).not.toContain("password-secret");
-    expect(storedError).not.toContain("query-secret");
-    expect(storedError).not.toContain("other-secret");
+    expect(thrown).toBe("Collection failed for secret-source");
+    expect(storedError).toBe("Collection failed for secret-source");
+    for (const secret of secrets) {
+      expect(thrown).not.toContain(secret);
+      expect(storedError).not.toContain(secret);
+    }
     expect(consoleError).not.toHaveBeenCalled();
+    expect(consoleWarn).not.toHaveBeenCalled();
+    expect(consoleLog).not.toHaveBeenCalled();
   });
 });
