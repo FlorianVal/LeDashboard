@@ -1,3 +1,6 @@
+import { EventEmitter } from "node:events";
+import { Agent, type RequestOptions } from "node:https";
+import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ServiceConfig } from "../src/config.js";
 import {
@@ -26,6 +29,55 @@ function repositorySpy() {
 }
 
 describe("checkAvailability", () => {
+  it("uses an unverified request-local agent only for the opted-in service", async () => {
+    const originalTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    const insecureRequest = vi.fn((_url, options: RequestOptions, onResponse) => {
+      const response = new PassThrough() as PassThrough & { statusCode: number };
+      response.statusCode = 401;
+      queueMicrotask(() => {
+        onResponse(response);
+        response.end();
+      });
+      const request = new EventEmitter() as EventEmitter & {
+        end: ReturnType<typeof vi.fn>;
+        destroy: ReturnType<typeof vi.fn>;
+      };
+      request.end = vi.fn();
+      request.destroy = vi.fn();
+      return request;
+    });
+    const defaultFetch = vi.fn(async () => new Response(null, { status: 200 }));
+
+    await expect(checkAvailability({ ...baseService, tlsInsecure: true }, {
+      timeoutMs: 50,
+      fetchImpl: defaultFetch,
+      httpsRequestImpl: insecureRequest,
+      monotonicNow: () => 10,
+    })).resolves.toMatchObject({ available: true, error: null });
+
+    const agent = insecureRequest.mock.calls[0]?.[1].agent;
+    expect(agent).toBeInstanceOf(Agent);
+    expect((agent as Agent).options.rejectUnauthorized).toBe(false);
+    expect(defaultFetch).not.toHaveBeenCalled();
+    expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBe(originalTlsSetting);
+
+    await expect(checkAvailability({
+      ...baseService,
+      id: "plex",
+      url: "https://plex.test/identity",
+      expectedStatuses: [200],
+      tlsInsecure: false,
+    }, {
+      timeoutMs: 50,
+      fetchImpl: defaultFetch,
+      httpsRequestImpl: insecureRequest,
+      monotonicNow: () => 10,
+    })).resolves.toMatchObject({ available: true, error: null });
+
+    expect(defaultFetch).toHaveBeenCalledTimes(1);
+    expect(insecureRequest).toHaveBeenCalledTimes(1);
+  });
+
   it("accepts only a configured expected HTTP status without reading its body", async () => {
     const text = vi.fn(async () => "auth-token-from-body");
     const fetchImpl = vi.fn(async () => {

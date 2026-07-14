@@ -11,8 +11,8 @@
     "dev:server": "npm --workspace @ledashboard/server run dev",
     "dev:web": "npm --workspace @ledashboard/web run dev",
     "build": "npm --workspace @ledashboard/shared run build && npm --workspace @ledashboard/server run build && npm --workspace @ledashboard/web run build",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --exclude 'e2e/**'",
+    "test:watch": "vitest --exclude 'e2e/**'",
     "typecheck": "npm --workspace @ledashboard/shared run build -- --build --force && npm --workspaces --if-present run typecheck"
   },
   "repository": {

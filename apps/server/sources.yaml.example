@@ -1,113 +1,34 @@
-# Example configuration - copy to sources.yaml and edit
-sources:
-  - id: rpi-node
-    name: Raspberry Pi System
-    type: prometheus
-    url: http://localhost:9100/metrics
-    interval: 60
-    metrics:
-      - name: node_load1
-        category: system
-        unit: load
-        group: load
-        displayName: Charge CPU (1 min)
-      - name: node_load5
-        category: system
-        unit: load
-        group: load
-        displayName: Charge CPU (5 min)
-      - name: node_load15
-        category: system
-        unit: load
-        group: load
-        displayName: Charge CPU (15 min)
-      - name: node_memory_MemTotal_bytes
-        category: system
-        unit: bytes
-        group: memory
-        displayName: Mémoire Totale
-      - name: node_memory_MemAvailable_bytes
-        category: system
-        unit: bytes
-        group: memory
-        displayName: Mémoire Disponible
-      - name: node_memory_Active_bytes
-        category: system
-        unit: bytes
-        group: memory
-        displayName: Mémoire Active
-      - name: node_network_receive_bytes_total
-        category: network
-        unit: bytes
-        group: network_rx
-        displayName: Réception Réseau
-      - name: node_network_transmit_bytes_total
-        category: network
-        unit: bytes
-        group: network_tx
-        displayName: Émission Réseau
-
-  - id: home-assistant
-    name: Home Assistant
-    type: home-assistant
-    url: http://localhost:8123/api
-    interval: 300
-    auth:
-      token: YOUR_LONG_LIVED_ACCESS_TOKEN
-    sensors:
-      # Add your sensor entity_ids here
-      # - entity_id: sensor.temperature_living_room
-      #   name: Salon Temperature
-      #   category: environment
-      #   unit: °C
-      # - entity_id: sensor.humidity_living_room
-      #   name: Salon Humidite
-      #   category: environment
-      #   unit: "%"
-
-  - id: nas-node
-    name: NAS System
-    type: prometheus
-    url: http://100.100.172.55:9100/metrics
-    interval: 60
-    metrics:
-      - name: node_load1
-        category: system
-        unit: load
-        group: load
-        displayName: Charge CPU (1 min)
-      - name: node_load5
-        category: system
-        unit: load
-        group: load
-        displayName: Charge CPU (5 min)
-      - name: node_load15
-        category: system
-        unit: load
-        group: load
-        displayName: Charge CPU (15 min)
-      - name: node_memory_MemTotal_bytes
-        category: system
-        unit: bytes
-        group: memory
-        displayName: Mémoire Totale
-      - name: node_memory_MemAvailable_bytes
-        category: system
-        unit: bytes
-        group: memory
-        displayName: Mémoire Disponible
-      - name: node_memory_Active_bytes
-        category: system
-        unit: bytes
-        group: memory
-        displayName: Mémoire Active
-      - name: node_network_receive_bytes_total
-        category: network
-        unit: bytes
-        group: network_rx
-        displayName: Réception Réseau
-      - name: node_network_transmit_bytes_total
-        category: network
-        unit: bytes
-        group: network_tx
-        displayName: Émission Réseau
+homeAssistant:
+  url: http://192.168.0.84:8123/api
+  token: ${HA_TOKEN}
+  intervalSeconds: 300
+laPlante:
+  url: http://192.168.0.84:3001/api/dashboard-summary
+  intervalSeconds: 3600
+leTimelapse:
+  url: http://192.168.0.84:3003/api/status
+  intervalSeconds: 300
+mac:
+  url: http://192.168.0.84:9273/metrics
+  username: ${TELEGRAF_PROM_USERNAME}
+  password: ${TELEGRAF_PROM_PASSWORD}
+  intervalSeconds: 60
+  interface: en0
+nas:
+  url: http://192.168.0.78:9100/metrics
+  intervalSeconds: 300
+  mountpoint: /share/CACHEDEV1_DATA
+services:
+  - { id: lamaison, name: LaMaison, url: http://192.168.0.84/, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: home-assistant, name: Home Assistant, url: http://192.168.0.84:8123/, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: laplante, name: LaPlante, url: http://192.168.0.84:3001/health, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: ledashboard, name: LeDashboard, url: http://127.0.0.1:3002/health, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: letimelapse, name: LeTimelapse, url: http://192.168.0.84:3003/health, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: aion, name: Aion Gateway, url: https://florians-mac-mini.daggertooth-sunfish.ts.net/healthz, expectedStatuses: [200], latencyThresholdMs: 3000 }
+  - { id: couchdb, name: CouchDB, url: https://florians-mac-mini.daggertooth-sunfish.ts.net:8443/, expectedStatuses: [401], latencyThresholdMs: 1000, tlsInsecure: true }
+  - { id: plex, name: Plex, url: http://192.168.0.78:32400/identity, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: transmission, name: Transmission, url: http://192.168.0.78:9091/transmission/web/, expectedStatuses: [401], latencyThresholdMs: 1000 }
+  - { id: sonarr, name: Sonarr, url: http://192.168.0.78:8989/ping, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: radarr, name: Radarr, url: http://192.168.0.78:7878/ping, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: prowlarr, name: Prowlarr, url: http://192.168.0.78:9696/ping, expectedStatuses: [200], latencyThresholdMs: 1000 }
+  - { id: overseerr, name: Overseerr, url: http://192.168.0.78:5055/api/v1/status, expectedStatuses: [200], latencyThresholdMs: 1000 }

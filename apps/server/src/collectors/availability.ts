@@ -1,3 +1,9 @@
+import {
+  Agent,
+  request as httpsRequest,
+  type RequestOptions,
+} from "node:https";
+import type { ClientRequest, IncomingMessage } from "node:http";
 import type { ServiceConfig } from "../config.js";
 import type { CollectionResult, Collector } from "./types.js";
 import {
@@ -8,8 +14,36 @@ import {
 export type AvailabilityCheckOptions = {
   timeoutMs: number;
   fetchImpl?: typeof fetch;
+  httpsRequestImpl?: HttpsRequest;
   monotonicNow?: () => number;
 };
+
+type HttpsRequest = (
+  url: string | URL,
+  options: RequestOptions,
+  onResponse: (response: IncomingMessage) => void,
+) => Pick<ClientRequest, "on" | "end">;
+
+function fetchWithInsecureTls(
+  url: string,
+  signal: AbortSignal,
+  requestImpl: HttpsRequest,
+): Promise<Pick<Response, "status">> {
+  return new Promise((resolve, reject) => {
+    const agent = new Agent({ rejectUnauthorized: false });
+    const request = requestImpl(url, { agent, signal }, (response) => {
+      response.once("end", () => agent.destroy());
+      response.once("error", () => agent.destroy());
+      response.resume();
+      resolve({ status: response.statusCode ?? 0 });
+    });
+    request.on("error", (cause: Error) => {
+      agent.destroy();
+      reject(cause);
+    });
+    request.end();
+  });
+}
 
 export type AvailabilityCollectorOptions = {
   timeoutMs?: number;
@@ -29,7 +63,13 @@ export async function checkAvailability(
   const startedAt = monotonicNow();
 
   try {
-    const response = await fetchImpl(service.url, { signal });
+    const response = service.tlsInsecure
+      ? await fetchWithInsecureTls(
+        service.url,
+        signal,
+        options.httpsRequestImpl ?? httpsRequest,
+      )
+      : await fetchImpl(service.url, { signal });
     const latencyMs = Math.max(0, monotonicNow() - startedAt);
     if (!service.expectedStatuses.includes(response.status)) {
       return {
