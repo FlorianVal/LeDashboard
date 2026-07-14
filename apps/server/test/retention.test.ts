@@ -39,6 +39,20 @@ function countRollups(sqlite: AppDatabase, bucketSeconds: number): number {
   `).get(bucketSeconds) as { count: number }).count;
 }
 
+function getRollup(
+  sqlite: AppDatabase,
+  bucketSeconds: 300 | 3600,
+  ts: number,
+): { avg: number; min: number; max: number } {
+  return sqlite.prepare(`
+    SELECT avg, min, max
+    FROM samples_rollup
+    WHERE metric_key = 'mac.cpu_percent'
+      AND bucket_seconds = ?
+      AND ts = ?
+  `).get(bucketSeconds, ts) as { avg: number; min: number; max: number };
+}
+
 afterEach(() => {
   for (const { directory, sqlite } of databases.splice(0)) {
     sqlite.close();
@@ -163,6 +177,56 @@ describe("metrics retention", () => {
       { bucket_seconds: 3600, ts: now - 6 * DAY, avg: 20, min: 10, max: 30 },
     ]);
     expect(afterSecondRun).toEqual(afterFirstRun);
+  });
+
+  it("does not overwrite cutoff-straddling rollups after pruning raw rows", () => {
+    const sqlite = temporaryDatabase();
+    const now = 20_000_000;
+    const rawCutoff = now - 7 * DAY;
+    const fiveMinuteBucket = Math.floor(rawCutoff / 300) * 300;
+    const hourlyBucket = Math.floor(rawCutoff / 3600) * 3600;
+
+    seedRawSamples(sqlite, "mac.cpu_percent", rawCutoff - 100, 10);
+    seedRawSamples(sqlite, "mac.cpu_percent", rawCutoff + 50, 30);
+
+    runRetention(sqlite, now);
+    expect([
+      getRollup(sqlite, 300, fiveMinuteBucket),
+      getRollup(sqlite, 3600, hourlyBucket),
+    ]).toEqual([
+      { avg: 20, min: 10, max: 30 },
+      { avg: 20, min: 10, max: 30 },
+    ]);
+
+    runRetention(sqlite, now);
+    expect([
+      getRollup(sqlite, 300, fiveMinuteBucket),
+      getRollup(sqlite, 3600, hourlyBucket),
+    ]).toEqual([
+      { avg: 20, min: 10, max: 30 },
+      { avg: 20, min: 10, max: 30 },
+    ]);
+  });
+
+  it("updates rollups wholly after the raw cutoff when new samples arrive", () => {
+    const sqlite = temporaryDatabase();
+    const now = 20_000_000;
+    const rawCutoff = now - 7 * DAY;
+    const bucketAfterCutoff = Math.ceil(rawCutoff / 3600) * 3600;
+
+    seedRawSamples(sqlite, "mac.cpu_percent", bucketAfterCutoff + 60, 40);
+    runRetention(sqlite, now);
+
+    seedRawSamples(sqlite, "mac.cpu_percent", bucketAfterCutoff + 120, 60);
+    runRetention(sqlite, now);
+
+    expect([
+      getRollup(sqlite, 300, bucketAfterCutoff),
+      getRollup(sqlite, 3600, bucketAfterCutoff),
+    ]).toEqual([
+      { avg: 50, min: 40, max: 60 },
+      { avg: 50, min: 40, max: 60 },
+    ]);
   });
 
   it("selects raw, five-minute, and hourly resolution", () => {
