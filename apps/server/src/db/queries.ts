@@ -120,7 +120,12 @@ export function getSamples(
     )
     .all(metricId, fromTs, toTs) as { ts: number; value: number }[];
 
-  return rows.map((r) => ({ ts: r.ts, avg: r.value }));
+  return rows.map((r) => ({
+    ts: r.ts,
+    avg: r.value,
+    min: r.value,
+    max: r.value,
+  }));
 }
 
 export function getCategories(ctx: DbContext): CategoryInfo[] {
