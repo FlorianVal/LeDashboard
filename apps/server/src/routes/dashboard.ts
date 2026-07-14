@@ -207,7 +207,7 @@ function nasProjection(
   return {
     key: "nas.storage_used_bytes" as const,
     kind: "projection" as const,
-    name: "Projected usage",
+    name: "Projection à 30 jours",
     unit: "bytes",
     samples: [
       { ts: latest.ts, avg: latest.value, min: latest.value, max: latest.value },

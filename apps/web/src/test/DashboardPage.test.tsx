@@ -10,6 +10,7 @@ import type {
 } from "@ledashboard/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
+import HouseChart from "../components/HouseChart/HouseChart";
 
 class TestResizeObserver {
   observe() {}
@@ -138,6 +139,16 @@ function response(body: DashboardResponse) {
   });
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
@@ -152,6 +163,50 @@ afterEach(() => {
 });
 
 describe("Editorial dashboard", () => {
+  it("draws the API-shaped NAS projection through intervening observed timestamps without joining observed gaps", () => {
+    const nasChart = chart("nasStorage", "Stockage du NAS", [
+      {
+        ...series("nas.storage_used_bytes", "Utilisé", "bytes"),
+        samples: [
+          { ts: NOW, avg: 100, min: 100, max: 100 },
+          { ts: NOW + 20, avg: 120, min: 120, max: 120 },
+          { ts: NOW + 30, avg: 130, min: 130, max: 130 },
+        ],
+      },
+      {
+        ...series("nas.storage_total_bytes", "Capacité", "bytes"),
+        samples: [
+          { ts: NOW, avg: 1_000, min: 1_000, max: 1_000 },
+          { ts: NOW + 10, avg: 1_000, min: 1_000, max: 1_000 },
+          { ts: NOW + 20, avg: 1_000, min: 1_000, max: 1_000 },
+          { ts: NOW + 30, avg: 1_000, min: 1_000, max: 1_000 },
+        ],
+      },
+      {
+        ...series(
+          "nas.storage_used_bytes",
+          "Projection à 30 jours",
+          "bytes",
+          "projection",
+        ),
+        samples: [
+          { ts: NOW, avg: 100, min: 100, max: 100 },
+          { ts: NOW + 40, avg: 140, min: 140, max: 140 },
+        ],
+      },
+    ]);
+
+    const { container } = render(<HouseChart chart={nasChart} />);
+    const paths = Array.from(container.querySelectorAll<SVGPathElement>(".recharts-line-curve"));
+    const projectionPath = paths.find((path) => path.getAttribute("stroke-dasharray") === "6 6");
+    const observedUsedPath = paths.find((path) => path.getAttribute("stroke") === "#246d4e");
+
+    expect(projectionPath?.getAttribute("d")).toMatch(/[LC]/);
+    expect(observedUsedPath?.getAttribute("d")?.match(/M/g)).toHaveLength(2);
+    expect(screen.getByText(/Utilisé: 130 o/)).toBeInTheDocument();
+    expect(screen.getByText(/Projection à 30 jours \(projection\): 140 o/)).toBeInTheDocument();
+  });
+
   it("renders the seven curated chart titles, weather, and stale source context", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(dashboardFixture())));
 
@@ -213,7 +268,7 @@ describe("Editorial dashboard", () => {
     let refreshFromInterval!: () => void;
     vi.spyOn(window, "setInterval").mockImplementation((handler: TimerHandler, timeout?: number) => {
       if (timeout === 60_000) refreshFromInterval = handler as () => void;
-      return 1;
+      return 1 as unknown as ReturnType<typeof setInterval>;
     });
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(response(dashboardFixture()))
@@ -230,6 +285,59 @@ describe("Editorial dashboard", () => {
     expect(screen.getByText("Confort")).toBeVisible();
     expect(await screen.findByText(/Dernière vue conservée · Connexion interrompue/i)).toBeVisible();
     expect(screen.getByRole("button", { name: /Réessayer/i })).toBeVisible();
+  });
+
+  it("aborts a replaced request so an older response cannot overwrite newer dashboard state", async () => {
+    let refreshFromInterval!: () => void;
+    vi.spyOn(window, "setInterval").mockImplementation((handler: TimerHandler, timeout?: number) => {
+      if (timeout === 60_000) refreshFromInterval = handler as () => void;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    const older = deferred<Response>();
+    const newer = deferred<Response>();
+    const fetchMock = vi.fn()
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    act(() => refreshFromInterval());
+    const olderSignal = fetchMock.mock.calls[0][1]?.signal as AbortSignal;
+    const newerSignal = fetchMock.mock.calls[1][1]?.signal as AbortSignal;
+    expect(olderSignal.aborted).toBe(true);
+    expect(newerSignal.aborted).toBe(false);
+
+    const newestFixture = dashboardFixture();
+    newestFixture.charts.comfort.title = "Confort récent";
+    await act(async () => newer.resolve(response(newestFixture)));
+    expect(await screen.findByText("Confort récent")).toBeVisible();
+
+    await act(async () => older.resolve(response(dashboardFixture())));
+    expect(screen.getByText("Confort récent")).toBeVisible();
+    expect(screen.queryByText(/^Confort$/)).toBeNull();
+  });
+
+  it("aborts an in-flight periodic refresh on unmount and ignores its deferred response", async () => {
+    let refreshFromInterval!: () => void;
+    vi.spyOn(window, "setInterval").mockImplementation((handler: TimerHandler, timeout?: number) => {
+      if (timeout === 60_000) refreshFromInterval = handler as () => void;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    const periodic = deferred<Response>();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response(dashboardFixture()))
+      .mockReturnValueOnce(periodic.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    const view = render(<App />);
+    expect(await screen.findByText("Confort")).toBeVisible();
+
+    act(() => refreshFromInterval());
+    const periodicSignal = fetchMock.mock.calls[1][1]?.signal as AbortSignal;
+    view.unmount();
+    expect(periodicSignal.aborted).toBe(true);
+
+    await act(async () => periodic.resolve(response(dashboardFixture())));
+    expect(screen.queryByText("Confort")).toBeNull();
   });
 
   it("announces active incidents with their service context", async () => {

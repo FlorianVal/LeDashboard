@@ -36,7 +36,23 @@ function mergeSeries(chart: DashboardChart): ChartRow[] {
       rows.set(sample.ts, row);
     }
   }
-  return Array.from(rows.values()).sort((left, right) => left.ts - right.ts);
+  const merged = Array.from(rows.values()).sort((left, right) => left.ts - right.ts);
+  for (const item of chart.series) {
+    if (item.kind !== "projection") continue;
+    const id = seriesId(item);
+    for (let index = 1; index < item.samples.length; index += 1) {
+      const start = item.samples[index - 1];
+      const end = item.samples[index];
+      const duration = end.ts - start.ts;
+      if (duration <= 0) continue;
+      for (const row of merged) {
+        if (row.ts <= start.ts || row.ts >= end.ts) continue;
+        const progress = (row.ts - start.ts) / duration;
+        row[id] = start.avg + (end.avg - start.avg) * progress;
+      }
+    }
+  }
+  return merged;
 }
 
 function byteValue(value: number, suffix = false): string {

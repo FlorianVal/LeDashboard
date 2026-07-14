@@ -490,7 +490,7 @@ describe("curated dashboard routes", () => {
       url: "/api/dashboard",
     })).json();
     expect(body.charts.nasStorage.series.map((series: any) => series.name))
-      .not.toContain("Projected usage");
+      .not.toContain("Projection à 30 jours");
   });
 
   it("adds NAS projection at seven complete growing days and omits non-positive growth", async () => {
@@ -501,7 +501,7 @@ describe("curated dashboard routes", () => {
       url: "/api/dashboard",
     })).json();
     const projection = growingBody.charts.nasStorage.series.find(
-      (series: any) => series.name === "Projected usage",
+      (series: any) => series.name === "Projection à 30 jours",
     );
     const observed = growingBody.charts.nasStorage.series.find(
       (series: any) => series.name === "NAS storage used",
@@ -524,7 +524,7 @@ describe("curated dashboard routes", () => {
       url: "/api/dashboard",
     })).json();
     expect(shrinkingBody.charts.nasStorage.series.map((series: any) => series.name))
-      .not.toContain("Projected usage");
+      .not.toContain("Projection à 30 jours");
   });
 
   it("selects older complete NAS days when recent hourly coverage is incomplete", async () => {
