@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { dashboardFixture } from "./fixtures/dashboard";
 
-test("renders the editorial panorama on desktop and mobile", async ({ page }) => {
+test("renders the editorial panorama on desktop and mobile", async ({ page }, testInfo) => {
+  expect(testInfo.project.name).toBe("system-chrome");
   const consoleErrors: string[] = [];
   const pageErrors: string[] = [];
   page.on("console", (message) => {

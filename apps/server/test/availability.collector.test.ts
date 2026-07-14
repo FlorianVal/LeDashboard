@@ -1,5 +1,7 @@
 import { EventEmitter } from "node:events";
-import { Agent, type RequestOptions } from "node:https";
+import { readFileSync } from "node:fs";
+import { Agent, createServer, type RequestOptions } from "node:https";
+import type { AddressInfo } from "node:net";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ServiceConfig } from "../src/config.js";
@@ -29,6 +31,51 @@ function repositorySpy() {
 }
 
 describe("checkAvailability", () => {
+  it("uses the production HTTPS transport only when insecure TLS is opted in", async () => {
+    const originalTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    const server = createServer({
+      cert: readFileSync(new URL("./fixtures/localhost-cert.pem", import.meta.url)),
+      key: readFileSync(new URL("./fixtures/localhost-key.pem", import.meta.url)),
+    }, (_request, response) => {
+      response.writeHead(401);
+      response.end();
+    });
+
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", () => {
+        server.off("error", reject);
+        resolve();
+      });
+    });
+
+    try {
+      const address = server.address() as AddressInfo;
+      const service = {
+        ...baseService,
+        url: `https://127.0.0.1:${address.port}/`,
+      };
+
+      await expect(checkAvailability({ ...service, tlsInsecure: true }, {
+        timeoutMs: 1_000,
+      })).resolves.toMatchObject({ available: true, error: null });
+
+      await expect(checkAvailability(service, {
+        timeoutMs: 1_000,
+      })).resolves.toEqual({
+        available: false,
+        slow: false,
+        latencyMs: null,
+        error: "request_failed",
+      });
+      expect(process.env.NODE_TLS_REJECT_UNAUTHORIZED).toBe(originalTlsSetting);
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
+  });
+
   it("uses an unverified request-local agent only for the opted-in service", async () => {
     const originalTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
     const insecureRequest = vi.fn((_url, options: RequestOptions, onResponse) => {

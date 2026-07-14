@@ -28,6 +28,9 @@ jobs:
       - name: Build application
         run: npm run build
 
+      # Browser acceptance is a reviewed system-Chrome suite with runtime-specific
+      # baselines. This image workflow intentionally does not claim E2E coverage.
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
