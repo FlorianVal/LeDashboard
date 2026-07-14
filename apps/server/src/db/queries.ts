@@ -1,80 +1,75 @@
-import { v4 as uuid } from "uuid";
-import { eq } from "drizzle-orm";
+import type { CategoryInfo, MetricDef, Sample } from "@ledashboard/shared";
 import type { DbContext } from "./client.js";
-import { metricDefinitions } from "./schema.js";
-import type { MetricDef, Sample, CategoryInfo } from "@ledashboard/shared";
+
+type MetricDefinitionRow = {
+  key: string;
+  source_id: string;
+  display_name: string;
+  unit: string;
+};
+
+function toLegacyMetricDef(row: MetricDefinitionRow): MetricDef {
+  return {
+    id: row.key,
+    sourceId: row.source_id,
+    name: row.key,
+    displayName: row.display_name,
+    category: row.key.split(".", 1)[0],
+    unit: row.unit,
+    labels: {},
+  };
+}
 
 export function insertMetricDef(
   ctx: DbContext,
-  metric: Omit<MetricDef, "labels"> & { labelsJson?: string | null }
+  metric: Omit<MetricDef, "labels"> & { labelsJson?: string | null },
 ): void {
-  ctx.sqlite
-    .prepare(
-      `INSERT OR REPLACE INTO metric_definitions (id, source_id, name, display_name, category, unit, labels_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      metric.id,
-      metric.sourceId,
-      metric.name,
-      metric.displayName,
-      metric.category,
-      metric.unit ?? null,
-      metric.labelsJson ?? null,
-      new Date().toISOString()
-    );
+  ctx.sqlite.prepare(`
+    UPDATE metric_definitions
+    SET source_id = ?, display_name = ?, unit = COALESCE(?, unit)
+    WHERE key = ?
+  `).run(metric.sourceId, metric.displayName, metric.unit, metric.id);
 }
 
 export function insertSamplesBatch(
   ctx: DbContext,
-  items: { metricId: string; ts: number; value: number }[]
+  items: { metricId: string; ts: number; value: number }[],
 ): void {
   if (items.length === 0) return;
-  const stmt = ctx.sqlite.prepare(
-    `INSERT OR IGNORE INTO samples (id, metric_id, ts, value) VALUES (?, ?, ?, ?)`
-  );
-  const insert = ctx.sqlite.transaction(
+  const insert = ctx.sqlite.prepare(`
+    INSERT OR IGNORE INTO samples_raw (metric_key, ts, value)
+    SELECT ?, ?, ?
+    WHERE EXISTS (SELECT 1 FROM metric_definitions WHERE key = ?)
+  `);
+  const insertAll = ctx.sqlite.transaction(
     (rows: { metricId: string; ts: number; value: number }[]) => {
       for (const row of rows) {
-        stmt.run(uuid(), row.metricId, row.ts, row.value);
+        insert.run(row.metricId, row.ts, row.value, row.metricId);
       }
-    }
+    },
   );
-  insert(items);
+  insertAll(items);
 }
 
 export function getMetricDefinitions(ctx: DbContext): MetricDef[] {
-  const rows = ctx.db.select().from(metricDefinitions).all();
-  return rows.map((r) => ({
-    id: r.id,
-    sourceId: r.sourceId,
-    name: r.name,
-    displayName: r.displayName,
-    category: r.category,
-    unit: r.unit,
-    labels: r.labelsJson ? JSON.parse(r.labelsJson) : {},
-  }));
+  const rows = ctx.sqlite.prepare(`
+    SELECT key, source_id, display_name, unit
+    FROM metric_definitions
+    ORDER BY key
+  `).all() as MetricDefinitionRow[];
+  return rows.map(toLegacyMetricDef);
 }
 
 export function getMetricDefinition(
   ctx: DbContext,
-  id: string
+  id: string,
 ): MetricDef | null {
-  const row = ctx.db
-    .select()
-    .from(metricDefinitions)
-    .where(eq(metricDefinitions.id, id))
-    .get();
-  if (!row) return null;
-  return {
-    id: row.id,
-    sourceId: row.sourceId,
-    name: row.name,
-    displayName: row.displayName,
-    category: row.category,
-    unit: row.unit,
-    labels: row.labelsJson ? JSON.parse(row.labelsJson) : {},
-  };
+  const row = ctx.sqlite.prepare(`
+    SELECT key, source_id, display_name, unit
+    FROM metric_definitions
+    WHERE key = ?
+  `).get(id) as MetricDefinitionRow | undefined;
+  return row ? toLegacyMetricDef(row) : null;
 }
 
 export function getSamples(
@@ -82,83 +77,59 @@ export function getSamples(
   metricId: string,
   fromTs: number,
   toTs: number,
-  windowSeconds?: number
+  windowSeconds?: number,
 ): Sample[] {
   if (windowSeconds && windowSeconds > 0) {
     const bucket = Math.floor(windowSeconds);
-    const rows = ctx.sqlite
-      .prepare(
-        `SELECT (ts / ?) * ? AS bucket_ts,
-                AVG(value) AS avg_val,
-                MIN(value) AS min_val,
-                MAX(value) AS max_val
-         FROM samples
-         WHERE metric_id = ? AND ts >= ? AND ts <= ?
-         GROUP BY bucket_ts
-         ORDER BY bucket_ts ASC`
-      )
-      .all(bucket, bucket, metricId, fromTs, toTs) as {
+    const rows = ctx.sqlite.prepare(`
+      SELECT (ts / ?) * ? AS bucket_ts,
+             AVG(value) AS avg_val,
+             MIN(value) AS min_val,
+             MAX(value) AS max_val
+      FROM samples_raw
+      WHERE metric_key = ? AND ts >= ? AND ts <= ?
+      GROUP BY bucket_ts
+      ORDER BY bucket_ts ASC
+    `).all(bucket, bucket, metricId, fromTs, toTs) as {
       bucket_ts: number;
       avg_val: number;
       min_val: number;
       max_val: number;
     }[];
 
-    return rows.map((r) => ({
-      ts: r.bucket_ts,
-      avg: r.avg_val,
-      min: r.min_val,
-      max: r.max_val,
+    return rows.map((row) => ({
+      ts: row.bucket_ts,
+      avg: row.avg_val,
+      min: row.min_val,
+      max: row.max_val,
     }));
   }
 
-  const rows = ctx.sqlite
-    .prepare(
-      `SELECT ts, value FROM samples
-       WHERE metric_id = ? AND ts >= ? AND ts <= ?
-       ORDER BY ts ASC`
-    )
-    .all(metricId, fromTs, toTs) as { ts: number; value: number }[];
+  const rows = ctx.sqlite.prepare(`
+    SELECT ts, value
+    FROM samples_raw
+    WHERE metric_key = ? AND ts >= ? AND ts <= ?
+    ORDER BY ts ASC
+  `).all(metricId, fromTs, toTs) as { ts: number; value: number }[];
 
-  return rows.map((r) => ({
-    ts: r.ts,
-    avg: r.value,
-    min: r.value,
-    max: r.value,
+  return rows.map((row) => ({
+    ts: row.ts,
+    avg: row.value,
+    min: row.value,
+    max: row.value,
   }));
 }
 
 export function getCategories(ctx: DbContext): CategoryInfo[] {
-  const defs = getMetricDefinitions(ctx);
   const grouped = new Map<string, string[]>();
-  for (const def of defs) {
-    const ids = grouped.get(def.category) ?? [];
-    ids.push(def.id);
-    grouped.set(def.category, ids);
+  for (const definition of getMetricDefinitions(ctx)) {
+    const metricIds = grouped.get(definition.category) ?? [];
+    metricIds.push(definition.id);
+    grouped.set(definition.category, metricIds);
   }
-  const CATEGORY_ORDER = ["environment", "system", "network", "device"];
-
-  return Array.from(grouped.entries())
-    .sort((a, b) => {
-      const aIdx = CATEGORY_ORDER.indexOf(a[0]);
-      const bIdx = CATEGORY_ORDER.indexOf(b[0]);
-      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
-      return a[0].localeCompare(b[0]);
-    })
-    .map(([name, metricIds]) => ({
-      name,
-      metricIds,
-    }));
+  return Array.from(grouped, ([name, metricIds]) => ({ name, metricIds }));
 }
 
-export function deleteSamplesOlderThan(
-  ctx: DbContext,
-  cutoffTs: number
-): number {
-  const result = ctx.sqlite
-    .prepare(`DELETE FROM samples WHERE ts < ?`)
-    .run(cutoffTs);
-  return result.changes;
+export function deleteSamplesOlderThan(ctx: DbContext, cutoffTs: number): number {
+  return ctx.sqlite.prepare(`DELETE FROM samples_raw WHERE ts < ?`).run(cutoffTs).changes;
 }

@@ -25,26 +25,6 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   const ctx: DbContext = createDatabase(databasePath);
 
-  // Migration: fix auto-registered network metrics with wrong category
-  const migrationResult = ctx.sqlite
-    .prepare(
-      `UPDATE metric_definitions
-       SET category = 'network',
-           display_name = CASE
-             WHEN name LIKE '%node_network_receive_bytes_total%' THEN 'Réception Réseau'
-             WHEN name LIKE '%node_network_transmit_bytes_total%' THEN 'Émission Réseau'
-             ELSE display_name
-           END
-       WHERE name LIKE '%node_network_%'
-         AND category = 'auto'`
-    )
-    .run();
-  if (migrationResult.changes > 0) {
-    console.log(
-      `Migration: fixed ${migrationResult.changes} network metrics (category + display name)`
-    );
-  }
-
   const sourcesConfig = loadSourcesConfig(sourcesPath);
 
   const app = Fastify({ logger: !testMode });

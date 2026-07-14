@@ -2,14 +2,11 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { MetricKey } from "@ledashboard/shared";
 import Database from "better-sqlite3";
-import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema.js";
 
-export type AppDatabase = BetterSQLite3Database<typeof schema>;
+export type AppDatabase = Database.Database;
 
 export type DbContext = {
   sqlite: Database.Database;
-  db: AppDatabase;
 };
 
 type MetricDefinition = {
@@ -41,7 +38,8 @@ const METRIC_DEFINITIONS: readonly MetricDefinition[] = [
 ];
 
 function registerMetricDefinitions(sqlite: Database.Database): void {
-  if (METRIC_DEFINITIONS.length !== 16) {
+  const uniqueKeys = new Set(METRIC_DEFINITIONS.map(({ key }) => key));
+  if (METRIC_DEFINITIONS.length !== 16 || uniqueKeys.size !== METRIC_DEFINITIONS.length) {
     throw new Error("Metric definitions do not match the curated metric catalogue");
   }
 
@@ -126,6 +124,5 @@ export function createDatabase(path: string): DbContext {
   `);
 
   registerMetricDefinitions(sqlite);
-  const db = drizzle(sqlite, { schema });
-  return { sqlite, db };
+  return { sqlite };
 }
