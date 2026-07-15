@@ -1,7 +1,11 @@
 import { Buffer } from "node:buffer";
 import type { MacConfig, NasConfig } from "../config.js";
 import type { CollectionResult, MetricSampleInput } from "./types.js";
-import { fetchWithTimeout, RequestTimeoutError } from "./request.js";
+import {
+  fetchAndConsumeWithTimeout,
+  RequestTimeoutError,
+  RequestTransportError,
+} from "./request.js";
 
 type ParsedSample = {
   name: string;
@@ -153,21 +157,31 @@ async function fetchPrometheusText(
   headers?: Record<string, string>,
   timeoutMs = 10_000,
 ): Promise<string> {
-  let response: Response;
   try {
-    response = await fetchWithTimeout(fetchImpl, url, { headers }, timeoutMs);
+    return await fetchAndConsumeWithTimeout(
+      fetchImpl,
+      url,
+      { headers },
+      timeoutMs,
+      async (response) => {
+        if (!response.ok) {
+          throw new Error(`${sourceName} returned HTTP ${response.status}`);
+        }
+        try {
+          return await response.text();
+        } catch {
+          throw new Error(`${sourceName} response could not be read`);
+        }
+      },
+    );
   } catch (cause) {
-    throw new Error(cause instanceof RequestTimeoutError
-      ? `${sourceName} request timed out`
-      : `${sourceName} request failed`);
-  }
-  if (!response.ok) {
-    throw new Error(`${sourceName} returned HTTP ${response.status}`);
-  }
-  try {
-    return await response.text();
-  } catch {
-    throw new Error(`${sourceName} response could not be read`);
+    if (cause instanceof RequestTimeoutError) {
+      throw new Error(`${sourceName} request timed out`);
+    }
+    if (cause instanceof RequestTransportError) {
+      throw new Error(`${sourceName} request failed`);
+    }
+    throw cause;
   }
 }
 

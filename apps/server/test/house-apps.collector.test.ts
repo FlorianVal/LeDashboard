@@ -48,6 +48,31 @@ describe("house application collectors", () => {
     await expect(createCollector().collect()).rejects.toThrow(`${name} request timed out`);
   });
 
+  it("times out a stalled JSON body and allows the next collection", async () => {
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      const response = Response.json({ overdueCount: 1, lastWateredOn: null });
+      if (calls === 1) {
+        Object.defineProperty(response, "json", {
+          value: () => new Promise<unknown>(() => undefined),
+        });
+      }
+      return response;
+    };
+    const collector = new LaPlanteCollector(plantsConfig, fetchImpl, 5);
+    const guard = new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("collector stayed pending")), 100);
+    });
+
+    await expect(Promise.race([collector.collect(), guard]))
+      .rejects.toThrow("LaPlante request timed out");
+    await expect(collector.collect()).resolves.toMatchObject({
+      samples: [{ key: "plants.overdue_count", value: 1 }],
+    });
+    expect(calls).toBe(2);
+  });
+
   it("maps house summaries without detail duplication", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));

@@ -236,4 +236,21 @@ describe("HomeAssistantCollector", () => {
 
     await expect(collector.collect()).rejects.toThrow("Home Assistant request timed out");
   });
+
+  it("keeps the timeout active while a JSON response body stalls", async () => {
+    const fetchImpl: typeof fetch = async () => {
+      const response = Response.json({});
+      Object.defineProperty(response, "json", {
+        value: () => new Promise<unknown>(() => undefined),
+      });
+      return response;
+    };
+    const collector = new HomeAssistantCollector(config, fetchImpl, 5);
+    const guard = new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("collector stayed pending")), 100);
+    });
+
+    await expect(Promise.race([collector.collect(), guard]))
+      .rejects.toThrow("Home Assistant request timed out");
+  });
 });

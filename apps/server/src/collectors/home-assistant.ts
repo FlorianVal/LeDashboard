@@ -4,7 +4,11 @@ import type {
   CurrentValueInput,
   MetricSampleInput,
 } from "./types.js";
-import { fetchWithTimeout, RequestTimeoutError } from "./request.js";
+import {
+  fetchAndConsumeWithTimeout,
+  RequestTimeoutError,
+  RequestTransportError,
+} from "./request.js";
 
 const CLIMATE_ENTITY = "climate.air_conditioner";
 const WEATHER_ENTITY = "weather.forecast_maison";
@@ -59,29 +63,34 @@ export class HomeAssistantCollector {
   }
 
   private async fetchEntity(entityId: string): Promise<Record<string, unknown>> {
-    let response: Response;
     try {
-      response = await fetchWithTimeout(
+      return await fetchAndConsumeWithTimeout(
         this.fetchImpl,
         `${this.config.url.replace(/\/$/, "")}/states/${entityId}`,
         { headers: { authorization: `Bearer ${this.config.token}` } },
         this.timeoutMs,
+        async (response) => {
+          if (!response.ok) {
+            throw new Error(`Home Assistant returned HTTP ${response.status}`);
+          }
+          if (!isJson(response)) {
+            throw new Error("Home Assistant returned a non-JSON response");
+          }
+          try {
+            return asRecord(await response.json());
+          } catch {
+            throw new Error("Home Assistant returned malformed JSON");
+          }
+        },
       );
     } catch (cause) {
-      throw new Error(cause instanceof RequestTimeoutError
-        ? "Home Assistant request timed out"
-        : "Home Assistant request failed");
-    }
-    if (!response.ok) {
-      throw new Error(`Home Assistant returned HTTP ${response.status}`);
-    }
-    if (!isJson(response)) {
-      throw new Error("Home Assistant returned a non-JSON response");
-    }
-    try {
-      return asRecord(await response.json());
-    } catch {
-      throw new Error("Home Assistant returned malformed JSON");
+      if (cause instanceof RequestTimeoutError) {
+        throw new Error("Home Assistant request timed out");
+      }
+      if (cause instanceof RequestTransportError) {
+        throw new Error("Home Assistant request failed");
+      }
+      throw cause;
     }
   }
 

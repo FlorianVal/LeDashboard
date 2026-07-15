@@ -71,6 +71,35 @@ describe("MacMetricsCollector", () => {
     await expect(collector.collect()).rejects.toThrow("Mac metrics request timed out");
   });
 
+  it("times out a stalled metrics body and allows the next collection", async () => {
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      const response = new Response(macFixture());
+      if (calls === 1) {
+        Object.defineProperty(response, "text", {
+          value: () => new Promise<string>(() => undefined),
+        });
+      }
+      return response;
+    };
+    const collector = new MacMetricsCollector(macConfig, fetchImpl, () => 100, 5);
+    const guard = new Promise<never>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("collector stayed pending")), 100);
+    });
+
+    await expect(Promise.race([collector.collect(), guard]))
+      .rejects.toThrow("Mac metrics request timed out");
+    await expect(collector.collect()).resolves.toMatchObject({
+      samples: [
+        { key: "mac.cpu_percent", value: 38 },
+        { key: "mac.memory_percent", value: 61 },
+        { key: "mac.disk_percent", value: 42 },
+      ],
+    });
+    expect(calls).toBe(2);
+  });
+
   it("maps native Telegraf gauges and converts configured-interface counters to rates", async () => {
     const fixture = mutableTextFixture([
       "# HELP cpu_usage_active Percentage of time the CPU was active",

@@ -11,7 +11,7 @@ import {
   SourceManager,
   SourceRepository,
 } from "../src/services/source-manager.js";
-import { fetchWithTimeout } from "../src/collectors/request.js";
+import { withRequestTimeout } from "../src/collectors/request.js";
 
 const managers: SourceManager[] = [];
 const cleanups: Array<() => void> = [];
@@ -175,10 +175,8 @@ describe("SourceManager", () => {
     const collector = countedCollector("bounded", 5, async () => {
       attempts += 1;
       if (attempts === 1) {
-        await fetchWithTimeout(
+        await withRequestTimeout(
           () => new Promise<Response>(() => undefined),
-          "http://bounded.test",
-          {},
           1_000,
         );
       }

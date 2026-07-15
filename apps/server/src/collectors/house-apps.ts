@@ -4,7 +4,11 @@ import type {
   CollectionResult,
   CurrentValueInput,
 } from "./types.js";
-import { fetchWithTimeout, RequestTimeoutError } from "./request.js";
+import {
+  fetchAndConsumeWithTimeout,
+  RequestTimeoutError,
+  RequestTransportError,
+} from "./request.js";
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const timestampSchema = z.string().datetime({ offset: true });
@@ -41,24 +45,34 @@ async function fetchJson(
   fetchImpl: typeof fetch,
   timeoutMs: number,
 ): Promise<unknown> {
-  let response: Response;
   try {
-    response = await fetchWithTimeout(fetchImpl, url, {}, timeoutMs);
+    return await fetchAndConsumeWithTimeout(
+      fetchImpl,
+      url,
+      {},
+      timeoutMs,
+      async (response) => {
+        if (!response.ok) {
+          throw new Error(`${sourceName} returned HTTP ${response.status}`);
+        }
+        if (!isJson(response)) {
+          throw new Error(`${sourceName} returned a non-JSON response`);
+        }
+        try {
+          return await response.json();
+        } catch {
+          throw new Error(`${sourceName} returned malformed JSON`);
+        }
+      },
+    );
   } catch (cause) {
-    throw new Error(cause instanceof RequestTimeoutError
-      ? `${sourceName} request timed out`
-      : `${sourceName} request failed`);
-  }
-  if (!response.ok) {
-    throw new Error(`${sourceName} returned HTTP ${response.status}`);
-  }
-  if (!isJson(response)) {
-    throw new Error(`${sourceName} returned a non-JSON response`);
-  }
-  try {
-    return await response.json();
-  } catch {
-    throw new Error(`${sourceName} returned malformed JSON`);
+    if (cause instanceof RequestTimeoutError) {
+      throw new Error(`${sourceName} request timed out`);
+    }
+    if (cause instanceof RequestTransportError) {
+      throw new Error(`${sourceName} request failed`);
+    }
+    throw cause;
   }
 }
 
