@@ -96,3 +96,12 @@ it("defaults every deployment entry point to the v2 database", () => {
   expect(readFileSync(new URL("../../../docker-compose.yml", import.meta.url), "utf8"))
     .toContain("DATABASE_PATH=/app/data/ledashboard-v2.sqlite");
 });
+
+it("builds the shared workspace before the root test command", () => {
+  const packageJson = JSON.parse(
+    readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+  ) as { scripts?: Record<string, string> };
+
+  expect(packageJson.scripts?.pretest)
+    .toBe("npm --workspace @ledashboard/shared run build");
+});
