@@ -1,4 +1,10 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
@@ -104,4 +110,38 @@ it("builds the shared workspace before the root test command", () => {
 
   expect(packageJson.scripts?.pretest)
     .toBe("npm --workspace @ledashboard/shared run build");
+});
+
+it("keeps host modules out of deterministic Docker builds", () => {
+  const dockerignoreUrl = new URL("../../../.dockerignore", import.meta.url);
+  expect(existsSync(dockerignoreUrl)).toBe(true);
+
+  const ignoredPaths = readFileSync(dockerignoreUrl, "utf8")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"));
+  expect(ignoredPaths).toEqual(expect.arrayContaining([
+    "node_modules",
+    "dist",
+    "build",
+    "tsconfig.tsbuildinfo",
+    "coverage",
+    "test-results",
+    "playwright-report",
+    ".worktrees",
+  ]));
+  expect(ignoredPaths.some((path) => path.startsWith("**/"))).toBe(false);
+
+  const dockerfile = readFileSync(
+    new URL("../../../Dockerfile", import.meta.url),
+    "utf8",
+  );
+  expect(dockerfile).toContain("RUN npm ci");
+  expect(dockerfile).not.toContain("RUN npm install");
+  expect(dockerfile).toContain("COPY apps/web/package.json ./apps/web/");
+  expect(dockerfile).toContain("COPY apps/server/package.json ./apps/server/");
+  expect(dockerfile).toContain(
+    "COPY packages/shared/package.json ./packages/shared/",
+  );
+  expect(dockerfile).not.toMatch(/COPY (?:apps|packages)\/.+\/package\*\.json/);
 });

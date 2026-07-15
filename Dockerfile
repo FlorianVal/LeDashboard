@@ -2,11 +2,11 @@ FROM node:20-bookworm AS builder
 WORKDIR /app
 
 COPY package*.json ./
-COPY apps/web/package*.json ./apps/web/
-COPY apps/server/package*.json ./apps/server/
-COPY packages/shared/package*.json ./packages/shared/
+COPY apps/web/package.json ./apps/web/
+COPY apps/server/package.json ./apps/server/
+COPY packages/shared/package.json ./packages/shared/
 
-RUN npm install
+RUN npm ci
 
 COPY . .
 

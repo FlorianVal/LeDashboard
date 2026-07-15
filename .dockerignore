@@ -1,0 +1,16 @@
+.git
+.gitignore
+.worktrees
+
+node_modules
+dist
+build
+tsconfig.tsbuildinfo
+
+coverage
+test-results
+playwright-report
+.superpowers
+
+.DS_Store
+*.log
