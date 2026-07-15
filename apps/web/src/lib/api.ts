@@ -6,7 +6,7 @@ import type {
   SourceStatus,
 } from "@ledashboard/shared";
 
-const API_BASE = "/api";
+const API_BASE = `${import.meta.env.BASE_URL.replace(/\/+$/, "")}/api`;
 
 async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { signal });

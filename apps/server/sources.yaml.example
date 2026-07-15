@@ -24,7 +24,7 @@ services:
   - { id: laplante, name: LaPlante, url: http://192.168.0.84:3001/health, expectedStatuses: [200], latencyThresholdMs: 1000 }
   - { id: ledashboard, name: LeDashboard, url: http://127.0.0.1:3002/health, expectedStatuses: [200], latencyThresholdMs: 1000 }
   - { id: letimelapse, name: LeTimelapse, url: http://192.168.0.84:3003/health, expectedStatuses: [200], latencyThresholdMs: 1000 }
-  - { id: aion, name: Aion Gateway, url: https://florians-mac-mini.daggertooth-sunfish.ts.net/healthz, expectedStatuses: [200], latencyThresholdMs: 3000 }
+  - { id: aion, name: Aion Gateway, url: http://192.168.0.84/aion-healthz, expectedStatuses: [200], latencyThresholdMs: 3000 }
   - { id: couchdb, name: CouchDB, url: https://florians-mac-mini.daggertooth-sunfish.ts.net:8443/, expectedStatuses: [401], latencyThresholdMs: 1000, tlsInsecure: true }
   - { id: plex, name: Plex, url: http://192.168.0.78:32400/identity, expectedStatuses: [200], latencyThresholdMs: 1000 }
   - { id: transmission, name: Transmission, url: http://192.168.0.78:9091/transmission/web/, expectedStatuses: [401], latencyThresholdMs: 1000 }

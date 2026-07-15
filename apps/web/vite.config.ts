@@ -6,7 +6,10 @@ export default defineConfig({
   base: "/ledashboard/",
   server: {
     proxy: {
-      "/api": "http://localhost:3000",
+      "/ledashboard/api": {
+        target: "http://localhost:3000",
+        rewrite: (path) => path.replace(/^\/ledashboard/, ""),
+      },
     },
   },
 });

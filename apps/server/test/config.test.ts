@@ -85,6 +85,8 @@ describe("curated source configuration", () => {
       mountpoint: "/share/CACHEDEV1_DATA",
     });
     expect(config.services).toHaveLength(13);
+    expect(config.services.find(({ id }) => id === "aion")?.url)
+      .toBe("http://192.168.0.84/aion-healthz");
     expect(config.services.find(({ id }) => id === "couchdb")?.tlsInsecure).toBe(true);
     expect(config.services
       .filter(({ id }) => id !== "couchdb")
