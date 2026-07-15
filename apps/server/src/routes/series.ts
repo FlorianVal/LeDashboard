@@ -4,6 +4,8 @@ import type { MetricsRepository } from "../db/repository.js";
 import { resolutionForRange } from "../services/retention.js";
 import {
   CHART_DEFINITIONS,
+  expectedIntervalFor,
+  materializeGaps,
   type CuratedMetricDefinition,
 } from "./dashboard.js";
 
@@ -75,6 +77,7 @@ export function registerSeriesRoutes(
       return reply.status(404).send({ error: "Series not found" });
     }
     const resolution = resolutionForRange(range.to - range.from);
+    const expectedIntervalSeconds = expectedIntervalFor(key, resolution);
     return {
       key,
       name: definition.displayName,
@@ -82,11 +85,15 @@ export function registerSeriesRoutes(
       from: range.from,
       to: range.to,
       resolution,
-      samples: dependencies.repository.getSeries(
-        key,
-        range.from,
-        range.to,
-        resolution,
+      expectedIntervalSeconds,
+      samples: materializeGaps(
+        dependencies.repository.getSeries(
+          key,
+          range.from,
+          range.to,
+          resolution,
+        ),
+        expectedIntervalSeconds,
       ),
     };
   });

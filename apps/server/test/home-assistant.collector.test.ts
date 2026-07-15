@@ -164,7 +164,11 @@ describe("HomeAssistantCollector", () => {
 
     const result = await collector.collect();
 
-    expect(result.currentValues).toEqual([]);
+    expect(result.currentValues).toEqual([{
+      key: "weather.condition",
+      ts: expect.any(Number),
+      textValue: null,
+    }]);
   });
 
   it("rejects a successful weather response without its condition", async () => {
@@ -224,5 +228,12 @@ describe("HomeAssistantCollector", () => {
     expect((error as Error).message).not.toContain(bodySecret);
     expect((error as Error).message).not.toContain(config.token);
     expect((error as Error).message).not.toContain(config.url);
+  });
+
+  it("bounds a transport that never settles with a safe timeout category", async () => {
+    const fetchImpl: typeof fetch = () => new Promise<Response>(() => undefined);
+    const collector = new HomeAssistantCollector(config, fetchImpl, 5);
+
+    await expect(collector.collect()).rejects.toThrow("Home Assistant request timed out");
   });
 });

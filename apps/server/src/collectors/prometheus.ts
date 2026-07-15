@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { MacConfig, NasConfig } from "../config.js";
 import type { CollectionResult, MetricSampleInput } from "./types.js";
+import { fetchWithTimeout, RequestTimeoutError } from "./request.js";
 
 type ParsedSample = {
   name: string;
@@ -150,12 +151,15 @@ async function fetchPrometheusText(
   url: string,
   fetchImpl: typeof fetch,
   headers?: Record<string, string>,
+  timeoutMs = 10_000,
 ): Promise<string> {
   let response: Response;
   try {
-    response = await fetchImpl(url, { headers });
-  } catch {
-    throw new Error(`${sourceName} request failed`);
+    response = await fetchWithTimeout(fetchImpl, url, { headers }, timeoutMs);
+  } catch (cause) {
+    throw new Error(cause instanceof RequestTimeoutError
+      ? `${sourceName} request timed out`
+      : `${sourceName} request failed`);
   }
   if (!response.ok) {
     throw new Error(`${sourceName} returned HTTP ${response.status}`);
@@ -183,6 +187,7 @@ export class MacMetricsCollector {
     private readonly config: MacConfig,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly now: () => number = () => Math.floor(Date.now() / 1000),
+    private readonly timeoutMs = 10_000,
   ) {
     this.intervalSeconds = config.intervalSeconds;
   }
@@ -202,6 +207,7 @@ export class MacMetricsCollector {
       this.config.url,
       this.fetchImpl,
       { authorization: `Basic ${authorization}` },
+      this.timeoutMs,
     );
     const parsed = parsePrometheusText(text);
     const samples: MetricSampleInput[] = [
@@ -297,6 +303,7 @@ export class NasMetricsCollector {
     private readonly config: NasConfig,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly now: () => number = () => Math.floor(Date.now() / 1000),
+    private readonly timeoutMs = 10_000,
   ) {
     this.intervalSeconds = config.intervalSeconds;
   }
@@ -311,6 +318,8 @@ export class NasMetricsCollector {
       "NAS metrics",
       this.config.url,
       this.fetchImpl,
+      undefined,
+      this.timeoutMs,
     );
     const parsed = parsePrometheusText(text);
     const labels = { mountpoint: this.config.mountpoint };

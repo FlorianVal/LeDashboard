@@ -66,6 +66,49 @@ function generatedLabel(generatedAt: string): string {
   return `Mis à jour à ${new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(date)}`;
 }
 
+function latestValue(
+  chart: DashboardResponse["charts"][keyof DashboardResponse["charts"]],
+  key: string,
+): number | null {
+  const samples = chart.series.find((series) =>
+    series.key === key && series.kind === "observed",
+  )?.samples;
+  return [...(samples ?? [])].reverse()
+    .find((sample) => sample.avg !== null)?.avg ?? null;
+}
+
+function shortDate(value: string): string {
+  const date = new Date(`${value}T12:00:00.000Z`);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat("fr-FR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(date);
+}
+
+function captureFacts(data: DashboardResponse): string[] {
+  const facts: string[] = [];
+  const success = data.facts["timelapse.capture_last_success_at"]?.textValue;
+  const error = data.facts["timelapse.capture_last_error"]?.textValue;
+  const state = data.sources.letimelapse?.state;
+  if (success) {
+    const date = new Date(success);
+    const time = Number.isNaN(date.getTime())
+      ? success
+      : new Intl.DateTimeFormat("fr-FR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }).format(date);
+    facts.push(`${state === "fresh" ? "Capture à jour" : "Dernière capture"} · ${time}`);
+  }
+  if (error) facts.push(`Dernière erreur · ${error}`);
+  return facts;
+}
+
 export default function EditorialDashboard({ data, error, refreshing, onRetry }: Props) {
   const status = statusCopy(data.overallState);
   const weather = data.supportingFacts.weather;
@@ -76,6 +119,35 @@ export default function EditorialDashboard({ data, error, refreshing, onRetry }:
     const sourceId = CHART_SOURCE[chartId];
     return freshnessLabel(sourceId, data.sources[sourceId]);
   };
+  const comfortFacts = [
+    ["Intérieur", "comfort.indoor_temperature"],
+    ["Extérieur", "comfort.outdoor_temperature"],
+    ["Consigne", "comfort.climate_target"],
+  ].flatMap(([label, key]) => {
+    const value = latestValue(data.charts.comfort, key);
+    return value === null ? [] : [`${label} · ${formatFact(value, "°C")}`];
+  });
+  const watering = data.facts["plants.last_watered_on"]?.textValue;
+  const used = latestValue(data.charts.nasStorage, "nas.storage_used_bytes");
+  const total = latestValue(data.charts.nasStorage, "nas.storage_total_bytes");
+  const nasFacts = used !== null && total !== null && total > 0
+    ? [`NAS utilisé · ${formatFact((used / total) * 100, "%")}`]
+    : [];
+  const serviceFacts = (data.serviceStates ?? [])
+    .filter((service) => service.state !== "up")
+    .map((service) => {
+      const state = service.state === "slow"
+        ? "lent"
+        : service.state === "recovering"
+          ? "en reprise"
+          : service.state === "degraded"
+            ? "dégradé"
+            : "indisponible";
+      const latency = service.latencyMs === null
+        ? ""
+        : ` · ${formatFact(service.latencyMs / 1_000, "s")}`;
+      return `${service.name} ${state}${latency}`;
+    });
 
   return (
     <div className={styles.panorama}>
@@ -126,7 +198,7 @@ export default function EditorialDashboard({ data, error, refreshing, onRetry }:
       )}
 
       <section className={styles.hero} aria-label="Confort et météo actuelle">
-        <HouseChart chart={data.charts.comfort} prominence="hero" sourceStatus={sourceStatus("comfort")} />
+        <HouseChart chart={data.charts.comfort} prominence="hero" sourceStatus={sourceStatus("comfort")} supportingFacts={comfortFacts} />
         <aside className={styles.weather} tabIndex={0}>
           <div className={styles.weatherTop}>
             <div>
@@ -164,8 +236,8 @@ export default function EditorialDashboard({ data, error, refreshing, onRetry }:
           <p>Des repères simples, suivis sur leur propre temporalité.</p>
         </div>
         <div className={styles.household}>
-          <HouseChart chart={data.charts.plants} sourceStatus={sourceStatus("plants")} />
-          <HouseChart chart={data.charts.timelapseStorage} sourceStatus={sourceStatus("timelapseStorage")} />
+          <HouseChart chart={data.charts.plants} sourceStatus={sourceStatus("plants")} supportingFacts={watering ? [`Dernier arrosage · ${shortDate(watering)}`] : []} />
+          <HouseChart chart={data.charts.timelapseStorage} sourceStatus={sourceStatus("timelapseStorage")} supportingFacts={captureFacts(data)} />
         </div>
       </section>
 
@@ -180,8 +252,8 @@ export default function EditorialDashboard({ data, error, refreshing, onRetry }:
         <div className={styles.infrastructure}>
           <HouseChart chart={data.charts.macResources} sourceStatus={sourceStatus("macResources")} />
           <HouseChart chart={data.charts.macNetwork} sourceStatus={sourceStatus("macNetwork")} />
-          <HouseChart chart={data.charts.nasStorage} sourceStatus={sourceStatus("nasStorage")} />
-          <HouseChart chart={data.charts.availability} sourceStatus={sourceStatus("availability")} />
+          <HouseChart chart={data.charts.nasStorage} sourceStatus={sourceStatus("nasStorage")} supportingFacts={nasFacts} />
+          <HouseChart chart={data.charts.availability} sourceStatus={sourceStatus("availability")} supportingFacts={serviceFacts} />
         </div>
       </section>
     </div>

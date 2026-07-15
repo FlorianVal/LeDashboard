@@ -4,6 +4,7 @@ import type {
   CurrentValueInput,
   MetricSampleInput,
 } from "./types.js";
+import { fetchWithTimeout, RequestTimeoutError } from "./request.js";
 
 const CLIMATE_ENTITY = "climate.air_conditioner";
 const WEATHER_ENTITY = "weather.forecast_maison";
@@ -52,15 +53,25 @@ export class HomeAssistantCollector {
   constructor(
     private readonly config: HomeAssistantConfig,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly timeoutMs = 10_000,
   ) {
     this.intervalSeconds = config.intervalSeconds;
   }
 
   private async fetchEntity(entityId: string): Promise<Record<string, unknown>> {
-    const response = await this.fetchImpl(
-      `${this.config.url.replace(/\/$/, "")}/states/${entityId}`,
-      { headers: { authorization: `Bearer ${this.config.token}` } },
-    );
+    let response: Response;
+    try {
+      response = await fetchWithTimeout(
+        this.fetchImpl,
+        `${this.config.url.replace(/\/$/, "")}/states/${entityId}`,
+        { headers: { authorization: `Bearer ${this.config.token}` } },
+        this.timeoutMs,
+      );
+    } catch (cause) {
+      throw new Error(cause instanceof RequestTimeoutError
+        ? "Home Assistant request timed out"
+        : "Home Assistant request failed");
+    }
     if (!response.ok) {
       throw new Error(`Home Assistant returned HTTP ${response.status}`);
     }
@@ -124,10 +135,13 @@ export class HomeAssistantCollector {
     }
 
     const condition = requiredString(weather.state, `${WEATHER_ENTITY}.state`);
-    const currentValues: CurrentValueInput[] =
-      condition === "unknown" || condition === "unavailable"
-        ? []
-        : [{ key: "weather.condition", ts, textValue: condition }];
+    const currentValues: CurrentValueInput[] = [{
+      key: "weather.condition",
+      ts,
+      textValue: condition === "unknown" || condition === "unavailable"
+        ? null
+        : condition,
+    }];
 
     return { samples, currentValues };
   }

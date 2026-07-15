@@ -57,6 +57,25 @@
   text-align: right;
 }
 
+.supportingFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 0;
+  margin: -7px 0 15px;
+  list-style: none;
+}
+
+.supportingFacts li {
+  padding: 6px 9px;
+  border: 1px solid var(--house-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--house-green-soft) 52%, transparent);
+  color: var(--house-ink);
+  font-size: .72rem;
+  font-weight: 600;
+}
+
 .plot { width: 100%; height: 240px; min-width: 0; }
 .hero .plot { height: 300px; }
 

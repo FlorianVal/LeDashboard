@@ -40,7 +40,15 @@ export type DashboardSeries = {
   kind: "observed" | "projection";
   name: string;
   unit: string;
-  samples: Sample[];
+  expectedIntervalSeconds?: number;
+  samples: DashboardSample[];
+};
+
+export type DashboardSample = {
+  ts: number;
+  avg: number | null;
+  min: number | null;
+  max: number | null;
 };
 
 export type NumericSupportingFact = {
@@ -78,6 +86,14 @@ export type DashboardResponse = {
   supportingFacts: DashboardSupportingFacts;
   sources: Record<string, SourceFreshness>;
   activeIncidents: Incident[];
+  serviceStates: DashboardServiceState[];
+};
+
+export type DashboardServiceState = {
+  serviceId: string;
+  name: string;
+  state: "up" | "slow" | "degraded" | "down" | "recovering";
+  latencyMs: number | null;
 };
 
 export type Sample = { ts: number; avg: number; min: number; max: number };

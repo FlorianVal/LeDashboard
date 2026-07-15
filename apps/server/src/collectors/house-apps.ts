@@ -4,6 +4,7 @@ import type {
   CollectionResult,
   CurrentValueInput,
 } from "./types.js";
+import { fetchWithTimeout, RequestTimeoutError } from "./request.js";
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const timestampSchema = z.string().datetime({ offset: true });
@@ -38,8 +39,16 @@ async function fetchJson(
   sourceName: string,
   url: string,
   fetchImpl: typeof fetch,
+  timeoutMs: number,
 ): Promise<unknown> {
-  const response = await fetchImpl(url);
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(fetchImpl, url, {}, timeoutMs);
+  } catch (cause) {
+    throw new Error(cause instanceof RequestTimeoutError
+      ? `${sourceName} request timed out`
+      : `${sourceName} request failed`);
+  }
   if (!response.ok) {
     throw new Error(`${sourceName} returned HTTP ${response.status}`);
   }
@@ -61,24 +70,23 @@ export class LaPlanteCollector {
   constructor(
     private readonly config: EndpointConfig,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly timeoutMs = 10_000,
   ) {
     this.intervalSeconds = config.intervalSeconds;
   }
 
   async collect(): Promise<CollectionResult> {
     const summary = laPlanteSummarySchema.parse(
-      await fetchJson("LaPlante", this.config.url, this.fetchImpl),
+      await fetchJson("LaPlante", this.config.url, this.fetchImpl, this.timeoutMs),
     );
     const ts = Math.floor(Date.now() / 1000);
     return {
       samples: [{ key: "plants.overdue_count", ts, value: summary.overdueCount }],
-      currentValues: summary.lastWateredOn === null
-        ? []
-        : [{
-            key: "plants.last_watered_on",
-            ts,
-            textValue: summary.lastWateredOn,
-          }],
+      currentValues: [{
+        key: "plants.last_watered_on",
+        ts,
+        textValue: summary.lastWateredOn,
+      }],
     };
   }
 }
@@ -91,38 +99,21 @@ export class LeTimelapseCollector {
   constructor(
     private readonly config: EndpointConfig,
     private readonly fetchImpl: typeof fetch = fetch,
+    private readonly timeoutMs = 10_000,
   ) {
     this.intervalSeconds = config.intervalSeconds;
   }
 
   async collect(): Promise<CollectionResult> {
     const status = timelapseStatusSchema.parse(
-      await fetchJson("LeTimelapse", this.config.url, this.fetchImpl),
+      await fetchJson("LeTimelapse", this.config.url, this.fetchImpl, this.timeoutMs),
     );
     const ts = Math.floor(Date.now() / 1000);
-    const currentValues: CurrentValueInput[] = [];
-
-    if (status.capture.lastSuccessAt !== null) {
-      currentValues.push({
-        key: "timelapse.capture_last_success_at",
-        ts,
-        textValue: status.capture.lastSuccessAt,
-      });
-    }
-    if (status.capture.lastErrorAt !== null) {
-      currentValues.push({
-        key: "timelapse.capture_last_error_at",
-        ts,
-        textValue: status.capture.lastErrorAt,
-      });
-    }
-    if (status.capture.lastError !== null) {
-      currentValues.push({
-        key: "timelapse.capture_last_error",
-        ts,
-        textValue: status.capture.lastError,
-      });
-    }
+    const currentValues: CurrentValueInput[] = [
+      { key: "timelapse.capture_last_success_at", ts, textValue: status.capture.lastSuccessAt },
+      { key: "timelapse.capture_last_error_at", ts, textValue: status.capture.lastErrorAt },
+      { key: "timelapse.capture_last_error", ts, textValue: status.capture.lastError },
+    ];
     currentValues.push({
       key: "timelapse.capture_expected_interval_seconds",
       ts,

@@ -10,8 +10,8 @@ export type MetricSampleInput = {
 export type CurrentValueInput = {
   key: CurrentValueKey;
   ts: number;
-  numericValue?: number;
-  textValue?: string;
+  numericValue?: number | null;
+  textValue?: string | null;
 };
 
 export type SeriesResolution = "raw" | "5m" | "1h";
@@ -79,14 +79,47 @@ export class MetricsRepository {
 
     const bucketSeconds = resolution === "5m" ? 300 : 3600;
     const rows = this.sqlite.prepare(`
+      WITH persisted AS (
+        SELECT ts, avg, min, max
+        FROM samples_rollup
+        WHERE metric_key = ?
+          AND bucket_seconds = ?
+          AND ts >= ?
+          AND ts <= ?
+      ), raw_tail AS (
+        SELECT
+          CAST(ts / ? AS INTEGER) * ? AS ts,
+          AVG(value) AS avg,
+          MIN(value) AS min,
+          MAX(value) AS max
+        FROM samples_raw
+        WHERE metric_key = ? AND ts >= ? AND ts <= ?
+        GROUP BY CAST(ts / ? AS INTEGER) * ?
+      ), merged AS (
+        SELECT ts, avg, min, max FROM persisted
+        WHERE ts NOT IN (SELECT ts FROM raw_tail)
+        UNION ALL
+        SELECT ts, avg, min, max FROM raw_tail
+      )
       SELECT ts, avg, min, max
-      FROM samples_rollup
-      WHERE metric_key = ?
-        AND bucket_seconds = ?
-        AND ts >= ?
-        AND ts <= ?
+      FROM merged
+      WHERE ts >= ? AND ts <= ?
       ORDER BY ts ASC
-    `).all(key, bucketSeconds, from, to) as Sample[];
+    `).all(
+      key,
+      bucketSeconds,
+      from,
+      to,
+      bucketSeconds,
+      bucketSeconds,
+      key,
+      from,
+      to,
+      bucketSeconds,
+      bucketSeconds,
+      from,
+      to,
+    ) as Sample[];
     return rows;
   }
 

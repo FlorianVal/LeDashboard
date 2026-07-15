@@ -113,4 +113,10 @@ export const dashboardFixture: DashboardResponse = {
     endedAt: null,
     lastError: "request_failed",
   }],
+  serviceStates: [{
+    serviceId: "plex",
+    name: "Plex",
+    state: "slow",
+    latencyMs: 1_400,
+  }],
 };

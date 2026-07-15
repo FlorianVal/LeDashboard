@@ -41,7 +41,7 @@ EXPOSE 3000
 
 ENV HOST=0.0.0.0
 ENV PORT=3000
-ENV DATABASE_PATH=/app/data/ledashboard.sqlite
+ENV DATABASE_PATH=/app/data/ledashboard-v2.sqlite
 ENV SOURCES_PATH=/app/sources.yaml
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \

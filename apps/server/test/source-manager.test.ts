@@ -11,6 +11,7 @@ import {
   SourceManager,
   SourceRepository,
 } from "../src/services/source-manager.js";
+import { fetchWithTimeout } from "../src/collectors/request.js";
 
 const managers: SourceManager[] = [];
 const cleanups: Array<() => void> = [];
@@ -167,6 +168,47 @@ describe("SourceManager", () => {
     expect(collect).toHaveBeenCalledTimes(2);
   });
 
+  it("releases the in-flight guard after a bounded request times out", async () => {
+    vi.useFakeTimers();
+    const { manager } = setup();
+    let attempts = 0;
+    const collector = countedCollector("bounded", 5, async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        await fetchWithTimeout(
+          () => new Promise<Response>(() => undefined),
+          "http://bounded.test",
+          {},
+          1_000,
+        );
+      }
+      return emptyResult;
+    });
+
+    manager.start([collector]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await vi.advanceTimersByTimeAsync(4_000);
+
+    expect(attempts).toBe(2);
+  });
+
+  it("waits for an in-flight collection before stopping cleanly", async () => {
+    const { manager } = setup();
+    const collection = deferred<CollectionResult>();
+    manager.start([countedCollector("closing", 60, () => collection.promise)]);
+    let stopped = false;
+
+    const stopping = Promise.resolve(manager.stop()).then(() => {
+      stopped = true;
+    });
+    await Promise.resolve();
+    expect(stopped).toBe(false);
+
+    collection.resolve(emptyResult);
+    await stopping;
+    expect(stopped).toBe(true);
+  });
+
   it("isolates a failed collector from healthy scheduled collectors", async () => {
     vi.useFakeTimers();
     const { manager, repository } = setup();
@@ -187,6 +229,29 @@ describe("SourceManager", () => {
       .toBe("Collection failed for failed");
     expect(repository.getSourceState("healthy")?.lastSuccessAt)
       .toBe("2026-07-14T12:00:00.000Z");
+  });
+
+  it("logs only a safe source id and category for scheduled failures", async () => {
+    vi.useFakeTimers();
+    const { repository } = setup();
+    const diagnostics = vi.fn();
+    const scheduled = new SourceManager(
+      repository,
+      () => new Date("2026-07-14T12:00:00.000Z"),
+      { diagnostic: diagnostics },
+    );
+    managers.push(scheduled);
+
+    scheduled.start([countedCollector("safe-source", 5, async () => {
+      throw new Error("token=super-secret");
+    })]);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(diagnostics).toHaveBeenCalledWith({
+      sourceId: "safe-source",
+      category: "collection_failed",
+    });
+    expect(JSON.stringify(diagnostics.mock.calls)).not.toContain("super-secret");
   });
 
   it("clears every interval when stopped", async () => {

@@ -13,6 +13,20 @@ export type SourceState = {
   lastError: string | null;
 };
 
+export type SourceDiagnostic = {
+  sourceId: string;
+  category: "collection_failed";
+};
+
+export type SourceManagerOptions = {
+  diagnostic?: (diagnostic: SourceDiagnostic) => void;
+  onSuccess?: (
+    collector: Collector,
+    result: CollectionResult,
+    attemptedAt: string,
+  ) => void;
+};
+
 type SourceStateRow = {
   source_id: string;
   last_attempt_at: string | null;
@@ -116,10 +130,12 @@ export class SourceManager {
     ReturnType<typeof setInterval>
   >();
   private readonly inFlight = new Set<string>();
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(
     private readonly repository: SourceRepository,
     private readonly now: () => Date = () => new Date(),
+    private readonly options: SourceManagerOptions = {},
   ) {}
 
   async runOnce(collector: Collector): Promise<void> {
@@ -143,6 +159,7 @@ export class SourceManager {
 
     try {
       this.repository.commitSuccess(collector.id, attemptedAt, result);
+      this.options.onSuccess?.(collector, result, attemptedAt);
     } catch {
       const error = new Error(`Collection failed for ${collector.id}`);
       this.repository.recordFailure(collector.id, attemptedAt, error.message);
@@ -153,9 +170,16 @@ export class SourceManager {
   private runScheduled(collector: Collector): void {
     if (this.inFlight.has(collector.id)) return;
     this.inFlight.add(collector.id);
-    void this.runOnce(collector)
-      .catch(() => undefined)
-      .finally(() => this.inFlight.delete(collector.id));
+    const pending = this.runOnce(collector)
+      .catch(() => this.options.diagnostic?.({
+        sourceId: collector.id,
+        category: "collection_failed",
+      }))
+      .finally(() => {
+        this.inFlight.delete(collector.id);
+        this.pending.delete(pending);
+      });
+    this.pending.add(pending);
   }
 
   start(collectors: readonly Collector[]): void {
@@ -173,10 +197,11 @@ export class SourceManager {
     }
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     for (const interval of this.intervals.values()) {
       clearInterval(interval);
     }
     this.intervals.clear();
+    await Promise.allSettled(this.pending);
   }
 }

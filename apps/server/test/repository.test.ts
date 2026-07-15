@@ -89,4 +89,41 @@ describe("MetricsRepository", () => {
       cleanup();
     }
   });
+
+  it("aggregates a fresh raw tail immediately for five-minute reads", () => {
+    const { ctx, cleanup } = temporaryDatabase();
+    try {
+      const repository = new MetricsRepository(ctx.sqlite);
+      repository.insertSamples([
+        { key: "mac.cpu_percent", ts: 601, value: 20 },
+        { key: "mac.cpu_percent", ts: 660, value: 40 },
+      ]);
+
+      expect(repository.getSeries("mac.cpu_percent", 0, 900, "5m"))
+        .toEqual([{ ts: 600, avg: 30, min: 20, max: 40 }]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("lets raw tail aggregation replace a persisted boundary bucket without duplicates", () => {
+    const { ctx, cleanup } = temporaryDatabase();
+    try {
+      const repository = new MetricsRepository(ctx.sqlite);
+      ctx.sqlite.prepare(`
+        INSERT INTO samples_rollup
+          (metric_key, bucket_seconds, ts, avg, min, max)
+        VALUES (?, 300, ?, ?, ?, ?)
+      `).run("mac.cpu_percent", 600, 10, 10, 10);
+      repository.insertSamples([
+        { key: "mac.cpu_percent", ts: 650, value: 30 },
+        { key: "mac.cpu_percent", ts: 700, value: 50 },
+      ]);
+
+      expect(repository.getSeries("mac.cpu_percent", 0, 900, "5m"))
+        .toEqual([{ ts: 600, avg: 40, min: 30, max: 50 }]);
+    } finally {
+      cleanup();
+    }
+  });
 });

@@ -42,6 +42,12 @@ export type Incident = {
   lastError: string | null;
 };
 
+export type CaptureStatus = {
+  lastSuccessAt: string | null;
+  lastErrorAt: string | null;
+  expectedIntervalSeconds: number;
+};
+
 type ServiceStateRow = {
   service_id: string;
   name: string;
@@ -84,6 +90,80 @@ function mapIncident(row: IncidentRow): Incident {
 
 export class IncidentRepository {
   constructor(private readonly sqlite: Database.Database) {}
+
+  applyCaptureStatus(status: CaptureStatus, checkedAt: string): ServiceState {
+    return this.sqlite.transaction(() => {
+      const service = { id: "letimelapse-capture", name: "Capture timelapse" };
+      const previous = this.getServiceState(service.id);
+      const checkedAtMs = Date.parse(checkedAt);
+      const successAtMs = status.lastSuccessAt === null
+        ? Number.NaN
+        : Date.parse(status.lastSuccessAt);
+      const errorAtMs = status.lastErrorAt === null
+        ? Number.NaN
+        : Date.parse(status.lastErrorAt);
+      const missedIntervals = Number.isFinite(successAtMs)
+        ? Math.max(0, checkedAtMs - successAtMs)
+          / (status.expectedIntervalSeconds * 1_000)
+        : Number.POSITIVE_INFINITY;
+      const newerError = Number.isFinite(errorAtMs)
+        && (!Number.isFinite(successAtMs) || errorAtMs > successAtMs);
+      const down = newerError || (Number.isFinite(successAtMs) && missedIntervals >= 6);
+      const degraded = !Number.isFinite(successAtMs) || missedIntervals >= 3;
+      let activeIncidentId = previous?.activeIncidentId ?? null;
+      let state: ServiceAvailabilityState;
+      let lastError: "capture_error" | "capture_stale" | null = null;
+
+      if (down) {
+        state = "down";
+        lastError = newerError ? "capture_error" : "capture_stale";
+        if (activeIncidentId === null) {
+          const inserted = this.sqlite.prepare(`
+            INSERT INTO incidents (service_id, started_at, ended_at, last_error)
+            VALUES (?, ?, NULL, ?)
+          `).run(service.id, checkedAt, lastError);
+          activeIncidentId = Number(inserted.lastInsertRowid);
+        } else {
+          this.sqlite.prepare(`
+            UPDATE incidents SET last_error = ? WHERE id = ? AND ended_at IS NULL
+          `).run(lastError, activeIncidentId);
+        }
+      } else if (degraded) {
+        state = activeIncidentId === null ? "degraded" : "recovering";
+      } else {
+        state = "up";
+        if (activeIncidentId !== null) {
+          this.sqlite.prepare(`
+            UPDATE incidents SET ended_at = ? WHERE id = ? AND ended_at IS NULL
+          `).run(checkedAt, activeIncidentId);
+          activeIncidentId = null;
+        }
+      }
+
+      this.sqlite.prepare(`
+        INSERT INTO service_state (
+          service_id, name, state, latency_ms,
+          consecutive_failures, consecutive_successes, active_incident_id
+        ) VALUES (?, ?, ?, NULL, ?, ?, ?)
+        ON CONFLICT(service_id) DO UPDATE SET
+          name = excluded.name,
+          state = excluded.state,
+          latency_ms = NULL,
+          consecutive_failures = excluded.consecutive_failures,
+          consecutive_successes = excluded.consecutive_successes,
+          active_incident_id = excluded.active_incident_id
+      `).run(
+        service.id,
+        service.name,
+        state,
+        down || degraded ? (previous?.consecutiveFailures ?? 0) + 1 : 0,
+        down || degraded ? 0 : (previous?.consecutiveSuccesses ?? 0) + 1,
+        activeIncidentId,
+      );
+
+      return this.getServiceState(service.id)!;
+    })();
+  }
 
   applyCheck(
     service: ServiceIdentity,

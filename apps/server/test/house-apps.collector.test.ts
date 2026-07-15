@@ -33,6 +33,21 @@ afterEach(() => {
 });
 
 describe("house application collectors", () => {
+  it.each([
+    ["LaPlante", () => new LaPlanteCollector(
+      plantsConfig,
+      () => new Promise<Response>(() => undefined),
+      5,
+    )],
+    ["LeTimelapse", () => new LeTimelapseCollector(
+      timelapseConfig,
+      () => new Promise<Response>(() => undefined),
+      5,
+    )],
+  ])("bounds a never-settling %s request", async (name, createCollector) => {
+    await expect(createCollector().collect()).rejects.toThrow(`${name} request timed out`);
+  });
+
   it("maps house summaries without detail duplication", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-14T12:00:00.000Z"));
@@ -66,6 +81,16 @@ describe("house application collectors", () => {
         textValue: "2026-07-14T12:00:00.000Z",
       },
       {
+        key: "timelapse.capture_last_error_at",
+        ts: 1_784_030_400,
+        textValue: null,
+      },
+      {
+        key: "timelapse.capture_last_error",
+        ts: 1_784_030_400,
+        textValue: null,
+      },
+      {
         key: "timelapse.capture_expected_interval_seconds",
         ts: 1_784_030_400,
         numericValue: 30,
@@ -73,7 +98,7 @@ describe("house application collectors", () => {
     ]);
   });
 
-  it("omits nullable house facts instead of storing numeric or textual zeroes", async () => {
+  it("emits explicit nulls so nullable house facts clear stale persisted values", async () => {
     const plants = new LaPlanteCollector(
       plantsConfig,
       fetchJsonFixture({ overdueCount: 0, lastWateredOn: null }),
@@ -98,11 +123,17 @@ describe("house application collectors", () => {
 
     expect(plantResult).toMatchObject({
       samples: [{ key: "plants.overdue_count", value: 0 }],
-      currentValues: [],
+      currentValues: [{
+        key: "plants.last_watered_on",
+        textValue: null,
+      }],
     });
     expect(timelapseResult).toMatchObject({
       samples: [{ key: "timelapse.library_bytes", value: 0 }],
       currentValues: [
+        { key: "timelapse.capture_last_success_at", textValue: null },
+        { key: "timelapse.capture_last_error_at", textValue: null },
+        { key: "timelapse.capture_last_error", textValue: null },
         {
           key: "timelapse.capture_expected_interval_seconds",
           numericValue: 30,

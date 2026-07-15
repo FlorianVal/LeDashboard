@@ -8,6 +8,6 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=3002
-      - DATABASE_PATH=/app/data/ledashboard.sqlite
+      - DATABASE_PATH=/app/data/ledashboard-v2.sqlite
       - SOURCES_PATH=/app/sources.yaml
     restart: unless-stopped

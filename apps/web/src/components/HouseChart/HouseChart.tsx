@@ -19,9 +19,10 @@ type Props = {
   chart: DashboardChart;
   sourceStatus?: string;
   prominence?: "hero" | "standard";
+  supportingFacts?: readonly string[];
 };
 
-type ChartRow = { ts: number } & Record<string, number | undefined>;
+type ChartRow = { ts: number } & Record<string, number | null | undefined>;
 
 function seriesId(item: DashboardSeries): string {
   return `${item.key}:${item.kind}`;
@@ -43,6 +44,7 @@ function mergeSeries(chart: DashboardChart): ChartRow[] {
     for (let index = 1; index < item.samples.length; index += 1) {
       const start = item.samples[index - 1];
       const end = item.samples[index];
+      if (start.avg === null || end.avg === null) continue;
       const duration = end.ts - start.ts;
       if (duration <= 0) continue;
       for (const row of merged) {
@@ -114,7 +116,12 @@ function ChartTooltip({ active, payload, label }: any) {
   );
 }
 
-export default function HouseChart({ chart, sourceStatus, prominence = "standard" }: Props) {
+export default function HouseChart({
+  chart,
+  sourceStatus,
+  prominence = "standard",
+  supportingFacts = [],
+}: Props) {
   const reducedMotion = useReducedMotion();
   const chartData = useMemo(() => {
     const rows = mergeSeries(chart);
@@ -123,11 +130,13 @@ export default function HouseChart({ chart, sourceStatus, prominence = "standard
     }
     return rows;
   }, [chart]);
-  const hasData = chart.series.some((item) => item.samples.length > 0);
+  const hasData = chart.series.some((item) =>
+    item.samples.some((sample) => sample.avg !== null),
+  );
   const primaryUnit = chart.series[0]?.unit ?? "";
   const latestSummary = chart.series.map((item) => {
-    const latest = item.samples[item.samples.length - 1];
-    return `${item.name}${item.kind === "projection" ? " (projection)" : ""}: ${latest ? formatMeasure(latest.avg, item.unit) : "sans mesure"}`;
+    const latest = [...item.samples].reverse().find((sample) => sample.avg !== null);
+    return `${item.name}${item.kind === "projection" ? " (projection)" : ""}: ${latest?.avg !== null && latest?.avg !== undefined ? formatMeasure(latest.avg, item.unit) : "sans mesure"}`;
   }).join(". ");
   const summaryId = `chart-summary-${chart.id}`;
 
@@ -145,6 +154,11 @@ export default function HouseChart({ chart, sourceStatus, prominence = "standard
         {sourceStatus && <span className={styles.sourceStatus}>{sourceStatus}</span>}
       </header>
       <p className={styles.srOnly} id={summaryId}>Graphique {chart.title}. {latestSummary}</p>
+      {supportingFacts.length > 0 && (
+        <ul className={styles.supportingFacts} aria-label={`Repères pour ${chart.title}`}>
+          {supportingFacts.map((fact) => <li key={fact}>{fact}</li>)}
+        </ul>
+      )}
       {hasData ? (
         <div className={styles.plot} aria-hidden="true">
           <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>

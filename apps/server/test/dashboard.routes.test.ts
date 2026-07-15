@@ -174,6 +174,7 @@ describe("curated dashboard routes", () => {
       "supportingFacts",
       "sources",
       "activeIncidents",
+      "serviceStates",
     ]);
     expect(Object.keys(body.charts)).toEqual([
       "comfort",
@@ -188,6 +189,7 @@ describe("curated dashboard routes", () => {
       .toEqual([DAY, 30 * DAY, 180 * DAY, DAY, DAY, 180 * DAY, 30 * DAY]);
     expect(body.charts.comfort.series[0].samples).toEqual([
       { ts: nowSeconds - 600, avg: 20, min: 20, max: 20 },
+      { ts: nowSeconds - 300, avg: null, min: null, max: null },
       { ts: nowSeconds, avg: 21, min: 21, max: 21 },
     ]);
     expect(body.charts.plants.series[0].samples).toHaveLength(1);
@@ -260,6 +262,60 @@ describe("curated dashboard routes", () => {
       expect.objectContaining({ serviceId: "plex", endedAt: null }),
     ]);
     expect(body.overallState).toBe("down");
+  });
+
+  it("exposes only compact safe service states and sanitizes capture errors", async () => {
+    const { now, repository, incidents, build } = setup();
+    repository.setCurrentValues([{
+      key: "timelapse.capture_last_error",
+      ts: 1,
+      textValue: "ffmpeg failed at https://user:secret@example.test/video",
+    }]);
+    incidents.applyCheck(
+      { id: "plex", name: "Plex" },
+      { available: true, slow: true, latencyMs: 1_400, error: null },
+      now.toISOString(),
+    );
+
+    const body = (await build().inject({
+      method: "GET",
+      url: "/api/dashboard",
+    })).json();
+
+    expect(body.serviceStates).toEqual([{
+      serviceId: "plex",
+      name: "Plex",
+      state: "slow",
+      latencyMs: 1_400,
+    }]);
+    expect(body.facts["timelapse.capture_last_error"].textValue)
+      .toBe("Erreur de capture");
+    expect(JSON.stringify(body)).not.toContain("secret");
+    expect(JSON.stringify(body)).not.toContain("example.test");
+    expect(body.serviceStates[0]).not.toHaveProperty("consecutiveFailures");
+    expect(body.serviceStates[0]).not.toHaveProperty("activeIncidentId");
+  });
+
+  it("materializes a null sample when a lone observed series misses its cadence", async () => {
+    const { now, repository, build } = setup();
+    const nowSeconds = Math.floor(now.getTime() / 1_000);
+    repository.insertSamples([
+      { key: "mac.cpu_percent", ts: nowSeconds - 600, value: 20 },
+      { key: "mac.cpu_percent", ts: nowSeconds, value: 25 },
+    ]);
+
+    const body = (await build().inject({
+      method: "GET",
+      url: "/api/dashboard",
+    })).json();
+    const cpu = body.charts.macResources.series[0];
+
+    expect(cpu.expectedIntervalSeconds).toBe(60);
+    expect(cpu.samples).toEqual([
+      { ts: nowSeconds - 600, avg: 20, min: 20, max: 20 },
+      { ts: nowSeconds - 540, avg: null, min: null, max: null },
+      { ts: nowSeconds, avg: 25, min: 25, max: 25 },
+    ]);
   });
 
   it.each([
@@ -402,13 +458,18 @@ describe("curated dashboard routes", () => {
     })).json();
 
     expect(raw).toMatchObject({ resolution: "raw", from: nowSeconds - 2 * DAY, to: nowSeconds });
-    expect(raw.samples).toHaveLength(2);
+    expect(raw.samples.filter((sample: any) => sample.avg !== null)).toHaveLength(2);
+    expect(raw.samples.some((sample: any) => sample.avg === null)).toBe(true);
     expect(fiveMinute).toMatchObject({ resolution: "5m" });
-    expect(fiveMinute.samples).toEqual([
+    expect(fiveMinute.samples.filter((sample: any) => sample.avg !== null)).toEqual([
       { ts: nowSeconds - 10 * DAY, avg: 33, min: 30, max: 35 },
+      { ts: nowSeconds - DAY, avg: 11, min: 11, max: 11 },
+      { ts: nowSeconds, avg: 22, min: 22, max: 22 },
     ]);
     expect(hourly).toMatchObject({ resolution: "1h" });
-    expect(hourly.samples).toHaveLength(1);
+    expect(hourly.samples.filter((sample: any) => sample.avg !== null)).toHaveLength(3);
+    expect(fiveMinute.samples.some((sample: any) => sample.avg === null)).toBe(true);
+    expect(hourly.samples.some((sample: any) => sample.avg === null)).toBe(true);
   });
 
   it.each([

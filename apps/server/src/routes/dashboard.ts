@@ -5,6 +5,7 @@ import type {
   DashboardResponse,
   DashboardSeries,
   DashboardSupportingFacts,
+  DashboardSample,
   MetricKey,
   SourceFreshness,
 } from "@ledashboard/shared";
@@ -15,6 +16,55 @@ import type { SourceRepository } from "../services/source-manager.js";
 import { resolutionForRange } from "../services/retention.js";
 
 const DAY = 86_400;
+
+const EXPECTED_CADENCE: Readonly<Record<MetricKey, number>> = {
+  "comfort.indoor_temperature": 300,
+  "comfort.outdoor_temperature": 300,
+  "comfort.climate_target": 300,
+  "weather.humidity": 300,
+  "weather.pressure": 300,
+  "weather.wind_speed": 300,
+  "plants.overdue_count": 3_600,
+  "timelapse.library_bytes": 300,
+  "mac.cpu_percent": 60,
+  "mac.memory_percent": 60,
+  "mac.disk_percent": 60,
+  "mac.network_receive_bps": 60,
+  "mac.network_transmit_bps": 60,
+  "nas.storage_used_bytes": 300,
+  "nas.storage_total_bytes": 300,
+  "services.available_percent": 60,
+};
+
+export function expectedIntervalFor(
+  key: MetricKey,
+  resolution: "raw" | "5m" | "1h",
+): number {
+  if (resolution === "5m") return 300;
+  if (resolution === "1h") return 3_600;
+  return EXPECTED_CADENCE[key];
+}
+
+export function materializeGaps(
+  samples: readonly { ts: number; avg: number; min: number; max: number }[],
+  expectedIntervalSeconds: number,
+): DashboardSample[] {
+  const result: DashboardSample[] = [];
+  for (const sample of samples) {
+    const previous = result[result.length - 1];
+    if (previous !== undefined
+        && sample.ts - previous.ts > expectedIntervalSeconds * 1.5) {
+      result.push({
+        ts: previous.ts + expectedIntervalSeconds,
+        avg: null,
+        min: null,
+        max: null,
+      });
+    }
+    result.push(sample);
+  }
+  return result;
+}
 
 type ChartDefinition = {
   id: ChartId;
@@ -232,12 +282,17 @@ function buildCharts(
     const series: DashboardSeries[] = chart.series.map((key) => {
       const definition = definitions.get(key);
       if (!definition) throw new Error(`Missing metric definition: ${key}`);
+      const expectedIntervalSeconds = expectedIntervalFor(key, resolution);
       return {
         key,
         kind: "observed" as const,
         name: definition.displayName,
         unit: definition.unit,
-        samples: repository.getSeries(key, from, nowSeconds, resolution),
+        expectedIntervalSeconds,
+        samples: materializeGaps(
+          repository.getSeries(key, from, nowSeconds, resolution),
+          expectedIntervalSeconds,
+        ),
       };
     });
     if (chart.id === "nasStorage") {
@@ -256,7 +311,11 @@ function buildCharts(
 function buildFacts(repository: MetricsRepository) {
   return Object.fromEntries(CURRENT_VALUE_KEYS.flatMap((key) => {
     const value = repository.getCurrentValue(key);
-    return value === null ? [] : [[key, value]];
+    if (value === null) return [];
+    if (key === "timelapse.capture_last_error" && value.textValue !== null) {
+      return [[key, { ...value, textValue: "Erreur de capture" }]];
+    }
+    return [[key, value]];
   }));
 }
 
@@ -395,6 +454,12 @@ export function registerDashboardRoutes(
       ),
       sources,
       activeIncidents,
+      serviceStates: dependencies.incidentRepository.getServiceStates().map((state) => ({
+        serviceId: state.serviceId,
+        name: state.name,
+        state: state.state,
+        latencyMs: state.latencyMs,
+      })),
     };
   });
 

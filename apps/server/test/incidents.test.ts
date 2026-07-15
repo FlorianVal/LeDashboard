@@ -36,6 +36,66 @@ function failure(error: ServiceCheckResult["error"]): ServiceCheckResult {
 }
 
 describe("IncidentRepository", () => {
+  it("persists a capture incident at six missed intervals and closes it on recovery", () => {
+    const { repository } = setup();
+    const now = new Date("2026-07-14T12:00:00.000Z");
+
+    repository.applyCaptureStatus({
+      lastSuccessAt: "2026-07-14T11:58:30.000Z",
+      lastErrorAt: null,
+      expectedIntervalSeconds: 30,
+    }, now.toISOString());
+    expect(repository.getServiceState("letimelapse-capture")).toMatchObject({
+      name: "Capture timelapse",
+      state: "degraded",
+    });
+    expect(repository.getActiveIncidents()).toEqual([]);
+
+    repository.applyCaptureStatus({
+      lastSuccessAt: "2026-07-14T11:57:00.000Z",
+      lastErrorAt: null,
+      expectedIntervalSeconds: 30,
+    }, now.toISOString());
+    expect(repository.getServiceState("letimelapse-capture")?.state).toBe("down");
+    expect(repository.getActiveIncidents()).toEqual([
+      expect.objectContaining({
+        serviceId: "letimelapse-capture",
+        endedAt: null,
+        lastError: "capture_stale",
+      }),
+    ]);
+
+    repository.applyCaptureStatus({
+      lastSuccessAt: "2026-07-14T11:59:45.000Z",
+      lastErrorAt: "2026-07-14T11:58:00.000Z",
+      expectedIntervalSeconds: 30,
+    }, now.toISOString());
+    expect(repository.getServiceState("letimelapse-capture")?.state).toBe("up");
+    expect(repository.getActiveIncidents()).toEqual([]);
+    expect(repository.getIncidents()).toEqual([
+      expect.objectContaining({
+        serviceId: "letimelapse-capture",
+        endedAt: now.toISOString(),
+      }),
+    ]);
+  });
+
+  it("opens a capture incident immediately when the latest error is newer", () => {
+    const { repository } = setup();
+    repository.applyCaptureStatus({
+      lastSuccessAt: "2026-07-14T11:59:45.000Z",
+      lastErrorAt: "2026-07-14T11:59:50.000Z",
+      expectedIntervalSeconds: 30,
+    }, "2026-07-14T12:00:00.000Z");
+
+    expect(repository.getActiveIncidents()).toEqual([
+      expect.objectContaining({
+        serviceId: "letimelapse-capture",
+        lastError: "capture_error",
+      }),
+    ]);
+  });
+
   it("opens after two failures and closes after two successes", () => {
     const { repository } = setup();
 

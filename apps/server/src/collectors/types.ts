@@ -9,8 +9,8 @@ export type MetricSampleInput = {
 export type CurrentValueInput = {
   key: CurrentValueKey;
   ts: number;
-  numericValue?: number;
-  textValue?: string;
+  numericValue?: number | null;
+  textValue?: string | null;
 };
 
 export type CollectionResult = {

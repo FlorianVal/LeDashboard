@@ -129,6 +129,7 @@ function dashboardFixture(): DashboardResponse {
       availability: { state: "fresh", lastSuccessAt: "2026-07-14T12:00:00.000Z", lastError: null },
     },
     activeIncidents: [],
+    serviceStates: [],
   };
 }
 
@@ -207,8 +208,37 @@ describe("Editorial dashboard", () => {
     expect(screen.getByText(/Projection à 30 jours \(projection\): 140 o/)).toBeInTheDocument();
   });
 
+  it("keeps a lone observed series visually broken across a materialized outage", () => {
+    const outage = chart("plants", "Plantes en retard", [{
+      ...series("plants.overdue_count", "En retard", "plants"),
+      expectedIntervalSeconds: 3_600,
+      samples: [
+        { ts: NOW, avg: 1, min: 1, max: 1 },
+        { ts: NOW + 3_600, avg: null, min: null, max: null },
+        { ts: NOW + 7_200, avg: 2, min: 2, max: 2 },
+      ],
+    } as any]);
+
+    const { container } = render(<HouseChart chart={outage} />);
+    const path = container.querySelector<SVGPathElement>(".recharts-line-curve");
+    expect(path?.getAttribute("d")?.match(/M/g)).toHaveLength(2);
+  });
+
   it("renders the seven curated chart titles, weather, and stale source context", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(dashboardFixture())));
+    const fixture = dashboardFixture();
+    fixture.facts["timelapse.capture_last_error"] = {
+      key: "timelapse.capture_last_error",
+      ts: NOW,
+      numericValue: null,
+      textValue: "Erreur de capture",
+    };
+    (fixture as any).serviceStates = [{
+      serviceId: "plex",
+      name: "Plex",
+      state: "slow",
+      latencyMs: 1_400,
+    }];
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response(fixture)));
 
     render(<App />);
 
@@ -227,6 +257,14 @@ describe("Editorial dashboard", () => {
     expect(screen.getByText("53 %")).toBeVisible();
     expect(screen.getByText("1 015 hPa")).toBeVisible();
     expect(screen.getByText("7,5 km\/h")).toBeVisible();
+    expect(screen.getByText(/Intérieur · 21,4 °C/)).toBeVisible();
+    expect(screen.getByText(/Extérieur · 21,4 °C/)).toBeVisible();
+    expect(screen.getByText(/Consigne · 21,4 °C/)).toBeVisible();
+    expect(screen.getByText(/Dernier arrosage · 13\/07\/2026/)).toBeVisible();
+    expect(screen.getByText(/Capture à jour/)).toBeVisible();
+    expect(screen.getByText(/Dernière erreur · Erreur de capture/)).toBeVisible();
+    expect(screen.getByText(/NAS utilisé/)).toHaveTextContent("NAS utilisé · 100 %");
+    expect(screen.getByText(/Plex lent · 1,4 s/)).toBeVisible();
     expect(screen.getAllByText(/Projection à 30 jours/).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText(/Raspberry|PC|iPhone|média|vidéo/i)).toBeNull();
     expect(screen.queryByRole("navigation")).toBeNull();

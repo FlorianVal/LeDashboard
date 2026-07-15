@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const serverConfigSchema = z.object({
   host: z.string().default("0.0.0.0"),
   port: z.coerce.number().default(3000),
-  databasePath: z.string().default(resolve(__dirname, "../../../data/ledashboard.sqlite")),
+  databasePath: z.string().default(resolve(__dirname, "../../../data/ledashboard-v2.sqlite")),
   sourcesPath: z.string().default(resolve(__dirname, "../../../sources.yaml")),
 });
 

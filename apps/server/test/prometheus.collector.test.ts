@@ -60,6 +60,17 @@ function sampleValue(result: CollectionResult, key: string): number | undefined 
 }
 
 describe("MacMetricsCollector", () => {
+  it("bounds a native metrics request that never settles", async () => {
+    const collector = new MacMetricsCollector(
+      macConfig,
+      () => new Promise<Response>(() => undefined),
+      () => 100,
+      5,
+    );
+
+    await expect(collector.collect()).rejects.toThrow("Mac metrics request timed out");
+  });
+
   it("maps native Telegraf gauges and converts configured-interface counters to rates", async () => {
     const fixture = mutableTextFixture([
       "# HELP cpu_usage_active Percentage of time the CPU was active",
@@ -316,6 +327,17 @@ describe("MacMetricsCollector", () => {
 });
 
 describe("NasMetricsCollector", () => {
+  it("bounds a NAS metrics request that never settles", async () => {
+    const collector = new NasMetricsCollector(
+      nasConfig,
+      () => new Promise<Response>(() => undefined),
+      () => 100,
+      5,
+    );
+
+    await expect(collector.collect()).rejects.toThrow("NAS metrics request timed out");
+  });
+
   it("selects only the configured QNAP main data volume", async () => {
     const body = [
       'node_filesystem_size_bytes{device="rootfs",fstype="ext4",mountpoint="/"} 500',
